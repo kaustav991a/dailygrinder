@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { PlusCircle, LayoutDashboard, Timer, Square, LogOut } from "lucide-react";
@@ -50,30 +50,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
-  const headerRef = useRef<HTMLHeadElement>(null);
-  const [headerHeight, setHeaderHeight] = useState(65); // Default height
 
   useEffect(() => {
     setIsClient(true);
   }, []);
   
-  useEffect(() => {
-    const observer = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        setHeaderHeight(entry.contentRect.height);
-      }
-    });
-
-    if (headerRef.current) {
-      observer.observe(headerRef.current);
-    }
-
-    return () => {
-      if (headerRef.current) {
-        observer.unobserve(headerRef.current);
-      }
-    };
-  }, []);
 
   const formatElapsedTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
@@ -128,7 +109,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar>
         <SidebarHeader 
             className="flex-row items-center justify-between px-4 py-3 border-b"
-            style={{ height: headerHeight ? `${headerHeight}px` : 'auto' }}
+            style={{ height: '65px' }}
         >
           <Link href="/" className="flex items-center gap-2">
             <Logo className="w-8 h-8 text-primary" />
@@ -189,7 +170,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </Sidebar>
 
       <SidebarInset>
-        <header ref={headerRef} className="flex items-center justify-between px-4 md:px-6 py-3 border-b">
+        <header className="flex items-center justify-between px-4 md:px-6 py-3 border-b" style={{ height: '65px' }}>
           <div className="flex items-center gap-2">
             <SidebarTrigger className="md:hidden" />
           </div>
