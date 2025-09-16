@@ -277,7 +277,7 @@ const SharedProjectAndDescriptionFields = () => {
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                {projects.filter(p => p.name !== 'Practice').map(project => (
+                {projects.filter(p => p.name !== 'Internal Activities').map(project => (
                   <SelectItem key={project.id} value={project.id}>
                     {project.name}
                   </SelectItem>

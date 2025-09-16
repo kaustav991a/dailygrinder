@@ -54,7 +54,7 @@ interface AppContextType {
   isLogPracticeDialogOpen: boolean;
   openLogPracticeDialog: () => void;
   closeLogPracticeDialog: () => void;
-  getOrCreatePracticeProject: () => Promise<string | undefined>;
+  getOrCreateInternalActivitiesProject: () => Promise<string | undefined>;
   timer: TimerState;
   startTimer: (projectId: string, description: string) => void;
   stopTimer: () => void;
@@ -88,9 +88,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
+      if (!firebaseUser) {
+        router.push('/login');
+      }
     });
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
@@ -230,15 +233,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setIsLogPracticeDialogOpen(false);
   };
   
-  const getOrCreatePracticeProject = useCallback(async () => {
+  const getOrCreateInternalActivitiesProject = useCallback(async () => {
     if (!user) return;
-    const practiceProject = projects.find(p => p.name === 'Practice' && p.userId === user.uid);
-    if (practiceProject) {
-      return practiceProject.id;
+    const internalProjectName = 'Internal Activities';
+    const internalProject = projects.find(p => p.name === internalProjectName && p.userId === user.uid);
+    if (internalProject) {
+      return internalProject.id;
     }
 
     // Check firestore just in case
-    const q = query(collection(db, 'projects'), where('userId', '==', user.uid), where('name', '==', 'Practice'));
+    const q = query(collection(db, 'projects'), where('userId', '==', user.uid), where('name', '==', internalProjectName));
     const querySnapshot = await getDocs(q);
 
     if (!querySnapshot.empty) {
@@ -248,17 +252,17 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     // Create it if it doesn't exist
     try {
       const docRef = await addDoc(collection(db, 'projects'), {
-        name: 'Practice',
-        description: 'Time spent on practice and learning.',
+        name: internalProjectName,
+        description: 'Time spent on internal activities like practice and checking.',
         userId: user.uid,
         createdAt: new Date().toISOString(),
       });
       return docRef.id;
     } catch (error) {
-      console.error("Error creating practice project:", error);
+      console.error("Error creating internal project:", error);
       toast({
         title: "Error",
-        description: "Could not create the internal Practice project. Please try again.",
+        description: "Could not create the internal project. Please try again.",
         variant: "destructive",
       });
     }
@@ -272,7 +276,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             projectId,
             description,
         });
-        router.push('/focus');
+        const project = projects.find(p => p.id === projectId);
+        if (project?.name !== 'Internal Activities') {
+          router.push('/focus');
+        }
     }
   };
 
@@ -313,6 +320,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     return () => clearInterval(interval);
   }, [timer]);
 
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+
   const value = {
     user,
     loading,
@@ -334,7 +348,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     isLogPracticeDialogOpen,
     openLogPracticeDialog,
     closeLogPracticeDialog,
-    getOrCreatePracticeProject,
+    getOrCreateInternalActivitiesProject,
     timer,
     startTimer,
     stopTimer,

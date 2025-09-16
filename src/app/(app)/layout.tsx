@@ -84,7 +84,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const groupProjectsByDate = (projects: Project[]) => {
     const sortedProjects = projects
-      .filter(p => p.name !== "Practice") // Exclude 'Practice' project
+      .filter(p => p.name !== "Internal Activities") // Exclude 'Internal Activities' project
       .sort((a, b) => 
         compareDesc(parseISO(a.createdAt || new Date().toISOString()), parseISO(b.createdAt || new Date().toISOString()))
       );

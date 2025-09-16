@@ -33,6 +33,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAppContext } from "@/contexts/app-context";
@@ -41,7 +48,8 @@ import { useToast } from "@/hooks/use-toast";
 const timeRegex = /^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$/; // HH:mm format
 
 const manualFormSchema = z.object({
-  description: z.string().min(1, "Please describe what you practiced."),
+  activityType: z.string().min(1, "Please select an activity type."),
+  description: z.string().min(1, "Please describe what you did."),
   startDate: z.date({ required_error: "Start date is required." }),
   startTime: z.string().regex(timeRegex, "Invalid time format (HH:mm)."),
   endDate: z.date({ required_error: "End date is required." }),
@@ -56,7 +64,8 @@ const manualFormSchema = z.object({
 });
 
 const timerFormSchema = z.object({
-  description: z.string().min(1, "Please describe what you are practicing."),
+  activityType: z.string().min(1, "Please select an activity type."),
+  description: z.string().min(1, "Please describe what you are doing."),
 });
 
 type LogPracticeDialogProps = {
@@ -75,30 +84,33 @@ function useDialogFormContext() {
 }
 
 function ManualPracticeForm() {
-  const { addTimeEntry, getOrCreatePracticeProject } = useAppContext();
+  const { addTimeEntry, getOrCreateInternalActivitiesProject } = useAppContext();
   const { toast } = useToast();
   const { control, handleSubmit, reset } = useFormContext<z.infer<typeof manualFormSchema>>();
   const { onOpenChange } = useDialogFormContext();
 
   async function onSubmit(values: z.infer<typeof manualFormSchema>) {
-    const practiceProjectId = await getOrCreatePracticeProject();
-    if (!practiceProjectId) return;
+    const internalProjectId = await getOrCreateInternalActivitiesProject();
+    if (!internalProjectId) return;
 
     const startDateTime = set(values.startDate, { hours: parseInt(values.startTime.split(':')[0]), minutes: parseInt(values.startTime.split(':')[1]) });
     const endDateTime = set(values.endDate, { hours: parseInt(values.endTime.split(':')[0]), minutes: parseInt(values.endTime.split(':')[1]) });
 
+    const fullDescription = `${values.activityType}: ${values.description}`;
+
     await addTimeEntry({
-      projectId: practiceProjectId,
-      description: values.description,
+      projectId: internalProjectId,
+      description: fullDescription,
       startTime: startDateTime.toISOString(),
       endTime: endDateTime.toISOString()
     });
 
     toast({
-      title: "Practice logged",
-      description: `Your practice session has been successfully logged.`,
+      title: "Activity logged",
+      description: `Your internal activity has been successfully logged.`,
     });
     reset({
+        activityType: "Practicing",
         description: "",
         startDate: new Date(),
         startTime: format(new Date(), "HH:mm"),
@@ -110,7 +122,7 @@ function ManualPracticeForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
-      <SharedPracticeDescriptionField control={control} />
+      <SharedActivityFields control={control} />
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <FormLabel>Start Date</FormLabel>
@@ -216,54 +228,78 @@ function ManualPracticeForm() {
         </div>
       </div>
       <DialogFooter>
-        <Button type="submit">Log Practice</Button>
+        <Button type="submit">Log Activity</Button>
       </DialogFooter>
     </form>
   )
 }
 
 function TimerPracticeForm() {
-    const { startTimer, timer, getOrCreatePracticeProject } = useAppContext();
+    const { startTimer, timer, getOrCreateInternalActivitiesProject } = useAppContext();
     const { handleSubmit, watch, control } = useFormContext<z.infer<typeof timerFormSchema>>();
     const { onOpenChange } = useDialogFormContext();
 
     const values = watch();
 
     const handleStartTimer = async () => {
-        const practiceProjectId = await getOrCreatePracticeProject();
-        if (!practiceProjectId) return;
-        startTimer(practiceProjectId, values.description);
+        const internalProjectId = await getOrCreateInternalActivitiesProject();
+        if (!internalProjectId) return;
+        const fullDescription = `${values.activityType}: ${values.description}`;
+        startTimer(internalProjectId, fullDescription);
         onOpenChange(false);
     };
 
     return (
         <form onSubmit={handleSubmit(handleStartTimer)} className="space-y-4 pt-4">
-            <SharedPracticeDescriptionField control={control} />
+            <SharedActivityFields control={control} />
             <DialogFooter>
                 <Button type="submit" disabled={timer.running}>
                     <Play className="mr-2" />
-                    {timer.running ? 'Timer is already running' : 'Start Practice Timer'}
+                    {timer.running ? 'Timer is already running' : 'Start Timer'}
                 </Button>
             </DialogFooter>
         </form>
     );
 }
 
-const SharedPracticeDescriptionField = ({ control }: { control: any }) => {
+const SharedActivityFields = ({ control }: { control: any }) => {
   return (
-    <FormField
+    <>
+      <FormField
+        control={control}
+        name="activityType"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Activity Type</FormLabel>
+            <Select onValueChange={field.onChange} value={field.value}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an activity type" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="Practicing">Practicing</SelectItem>
+                <SelectItem value="Checking">Checking</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
         control={control}
         name="description"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Practice Description</FormLabel>
+            <FormLabel>Description</FormLabel>
             <FormControl>
-              <Textarea placeholder="e.g., Practiced React hooks, studied database normalization" {...field} />
+              <Textarea placeholder="e.g., Studied database normalization, Checked team emails" {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
         )}
       />
+    </>
   );
 };
 
@@ -273,6 +309,7 @@ export function LogPracticeDialog({ open, onOpenChange }: LogPracticeDialogProps
   const manualForm = useForm<z.infer<typeof manualFormSchema>>({
     resolver: zodResolver(manualFormSchema),
     defaultValues: {
+      activityType: "Practicing",
       description: "",
       startDate: new Date(),
       startTime: format(new Date(), "HH:mm"),
@@ -284,6 +321,7 @@ export function LogPracticeDialog({ open, onOpenChange }: LogPracticeDialogProps
   const timerForm = useForm<z.infer<typeof timerFormSchema>>({
     resolver: zodResolver(timerFormSchema),
     defaultValues: {
+      activityType: "Practicing",
       description: "",
     },
   });
@@ -292,6 +330,7 @@ export function LogPracticeDialog({ open, onOpenChange }: LogPracticeDialogProps
     if (open) {
       const now = new Date();
       manualForm.reset({
+        activityType: "Practicing",
         description: "",
         startDate: now,
         startTime: format(now, "HH:mm"),
@@ -299,6 +338,7 @@ export function LogPracticeDialog({ open, onOpenChange }: LogPracticeDialogProps
         endTime: format(now, "HH:mm"),
       });
       timerForm.reset({
+        activityType: "Practicing",
         description: "",
       })
     }
@@ -310,9 +350,9 @@ export function LogPracticeDialog({ open, onOpenChange }: LogPracticeDialogProps
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><BookOpen /> Log Practice Session</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><BookOpen /> Log Internal Activity</DialogTitle>
           <DialogDescription>
-            Track time spent on learning, practice, or personal development.
+            Track time spent on non-project activities like learning or admin tasks.
           </DialogDescription>
         </DialogHeader>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
