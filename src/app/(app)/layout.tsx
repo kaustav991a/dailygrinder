@@ -116,6 +116,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   
   const groupedProjects = isClient ? groupProjectsByDate(projects) : [];
 
+  // Hide layout for focus mode
+  if (pathname === '/focus') {
+    return <>{children}</>;
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">

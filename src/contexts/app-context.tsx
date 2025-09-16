@@ -2,6 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   collection, 
   addDoc, 
@@ -75,6 +76,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   });
   const [elapsedTime, setElapsedTime] = useState(0);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -222,10 +224,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             projectId,
             description,
         });
-        toast({
-            title: "Timer Started",
-            description: "The timer is now running. Close this and get to work!",
-        });
+        router.push('/focus');
     }
   };
 
@@ -248,8 +247,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             projectId: null,
             description: null,
         });
+        router.replace('/');
     }
-  }, [timer, addTimeEntry, toast]);
+  }, [timer, addTimeEntry, toast, router]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | undefined;
