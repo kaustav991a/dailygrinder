@@ -124,13 +124,22 @@ export default function DashboardPage() {
     if (isToday(selectedDate)) return "today";
     return `on ${formatDate(selectedDate, 'PPP')}`;
   }
+  
+  const formatChartTooltip = (minutes: number) => {
+    const roundedMinutes = Math.round(minutes);
+    if (roundedMinutes < 60) {
+      return `${roundedMinutes} minutes`;
+    }
+    const hours = Math.floor(roundedMinutes / 60);
+    const remainingMinutes = roundedMinutes % 60;
+    return `${hours} hr ${remainingMinutes} min`;
+  };
 
-  if (!isClient || !user) {
+  if (!isClient) {
     return null;
   }
 
   return (
-    <>
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -201,7 +210,7 @@ export default function DashboardPage() {
                                 formatter={(value, name, item) => (
                                     <div className="flex flex-col">
                                         <span className="font-bold">{item.payload.name}</span>
-                                        <span>{Math.round(Number(value))} minutes</span>
+                                        <span>{formatChartTooltip(Number(value))}</span>
                                     </div>
                                 )}
                             />}
@@ -216,6 +225,8 @@ export default function DashboardPage() {
             )}
         </CardContent>
       </Card>
+      
+      <WeeklyReport />
 
       <Card>
         <CardHeader>
@@ -267,10 +278,6 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-      
-      <WeeklyReport />
-
     </div>
-    </>
   );
 }
