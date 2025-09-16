@@ -13,6 +13,7 @@ import { formatDuration } from '@/lib/utils';
 import type { TimeEntry } from '@/lib/types';
 import { TaskSuggester } from '@/components/task-suggester';
 import { EditTimeEntryDialog } from '@/components/edit-time-entry-dialog';
+import { EditProjectDialog } from '@/components/edit-project-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,7 @@ export default function ProjectPage() {
   } = useAppContext();
   
   const [isClient, setIsClient] = useState(false);
+  const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
   useEffect(() => { setIsClient(true) }, []);
 
   const projectId = Array.isArray(id) ? id[0] : id;
@@ -66,9 +68,14 @@ export default function ProjectPage() {
           <h1 className="text-3xl font-bold font-headline">{project.name}</h1>
           <p className="text-muted-foreground">{project.description}</p>
         </div>
-        <Button onClick={() => openLogTimeDialog(project.id)} className="w-full md:w-auto">
-          <Plus className="mr-2 h-4 w-4" /> Log Time
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+          <Button variant="outline" onClick={() => setIsEditProjectDialogOpen(true)} className="w-full md:w-auto">
+            <Edit className="mr-2 h-4 w-4" /> Edit Project
+          </Button>
+          <Button onClick={() => openLogTimeDialog(project.id)} className="w-full md:w-auto">
+            <Plus className="mr-2 h-4 w-4" /> Log Time
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -140,6 +147,13 @@ export default function ProjectPage() {
             onOpenChange={closeEditTimeEntryDialog}
             timeEntry={editingTimeEntry}
         />
+    )}
+    {project && (
+      <EditProjectDialog
+        open={isEditProjectDialogOpen}
+        onOpenChange={setIsEditProjectDialogOpen}
+        project={project}
+      />
     )}
     </>
   );

@@ -44,6 +44,7 @@ interface AppContextType {
   timeEntries: TimeEntry[];
   setTimeEntries: (timeEntries: TimeEntry[]) => void;
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'userId'> & { createdAt?: string }) => void;
+  updateProject: (id: string, data: Partial<Omit<Project, 'id' | 'userId'>>) => Promise<void>;
   addTimeEntry: (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => Promise<void>;
   updateTimeEntry: (id: string, data: Partial<Omit<TimeEntry, 'id' | 'userId'>>) => Promise<void>;
   deleteTimeEntry: (timeEntryId: string) => Promise<void>;
@@ -161,6 +162,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         title: "Error",
         description: "There was an error saving your project. Please try again.",
         variant: "destructive",
+      });
+    }
+  };
+
+  const updateProject = async (id: string, data: Partial<Omit<Project, 'id' | 'userId'>>) => {
+    if (!user) return;
+    try {
+      const projectRef = doc(db, 'projects', id);
+      await updateDoc(projectRef, data);
+      toast({
+        title: 'Project Updated',
+        description: 'Your project details have been saved.',
+      });
+    } catch (e) {
+      console.error('Error updating project: ', e);
+      toast({
+        title: 'Error Updating Project',
+        description: 'There was an issue saving your changes. Please try again.',
+        variant: 'destructive',
       });
     }
   };
@@ -376,6 +396,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     timeEntries,
     setTimeEntries,
     addProject,
+    updateProject,
     addTimeEntry,
     updateTimeEntry,
     deleteTimeEntry,
