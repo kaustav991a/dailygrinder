@@ -47,7 +47,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const headerRef = useRef<HTMLHeadElement>(null);
-  const [headerHeight, setHeaderHeight] = useState(60); // Default height
+  const [headerHeight, setHeaderHeight] = useState(65); // Default height
 
   useEffect(() => {
     setIsClient(true);
