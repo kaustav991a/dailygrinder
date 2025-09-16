@@ -44,12 +44,12 @@ export default function ProjectPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline">{project.name}</h1>
           <p className="text-muted-foreground">{project.description}</p>
         </div>
-        <Button onClick={() => openLogTimeDialog(project.id)}>
+        <Button onClick={() => openLogTimeDialog(project.id)} className="w-full md:w-auto">
           <Plus className="mr-2 h-4 w-4" /> Log Time
         </Button>
       </div>

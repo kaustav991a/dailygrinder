@@ -22,6 +22,7 @@ import {
   SidebarInset,
   SidebarFooter,
   SidebarSeparator,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useAppContext } from "@/contexts/app-context";
 import { Logo } from "@/components/icons";
@@ -194,10 +195,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <SidebarInset>
         <header ref={headerRef} className="flex items-center justify-between px-4 md:px-6 py-3 border-b">
-          <div className="flex-1" />
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="md:hidden" />
+          </div>
           <div className="flex items-center gap-4">
             {isClient && timer.running && timer.projectId && (
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 md:gap-4">
                 <div className="flex items-center gap-2">
                   <Timer className="w-5 h-5 text-primary" />
                   <div className="text-sm">
@@ -206,13 +209,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 </div>
                 <Button size="sm" onClick={stopTimer}>
-                  <Square className="mr-2" />
-                  Stop Timer
+                  <Square className="mr-2 hidden md:block" />
+                  Stop
                 </Button>
               </div>
             )}
              <Button variant="ghost" onClick={logout}>
-              <LogOut className="mr-2" />
+              <LogOut className="mr-2 hidden md:block" />
               Logout
             </Button>
           </div>

@@ -132,18 +132,18 @@ export default function DashboardPage() {
   return (
     <>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold font-headline">Welcome {userName}</h1>
             <p className="text-muted-foreground">Here's a summary of your grind {getDateDescription()}.</p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
             <Popover>
                 <PopoverTrigger asChild>
                     <Button
                     variant={"outline"}
                     className={cn(
-                        "w-[240px] justify-start text-left font-normal",
+                        "w-full md:w-[240px] justify-start text-left font-normal",
                         !selectedDate && "text-muted-foreground"
                     )}
                     >
@@ -160,12 +160,14 @@ export default function DashboardPage() {
                     />
                 </PopoverContent>
             </Popover>
-          <Button onClick={handleExport} disabled={timeEntries.length === 0}>
-            <Download className="mr-2 h-4 w-4" /> Export
-          </Button>
-          <Button onClick={() => openLogTimeDialog()}>
-            <Plus className="mr-2 h-4 w-4" /> Log Time
-          </Button>
+            <div className="grid grid-cols-2 gap-2">
+                <Button onClick={handleExport} disabled={timeEntries.length === 0}>
+                    <Download className="mr-2 h-4 w-4" /> Export
+                </Button>
+                <Button onClick={() => openLogTimeDialog()}>
+                    <Plus className="mr-2 h-4 w-4" /> Log Time
+                </Button>
+            </div>
         </div>
       </div>
 
