@@ -11,7 +11,8 @@ import {
   where,
   getDocs,
   deleteDoc,
-  doc
+  doc,
+  updateDoc
 } from 'firebase/firestore';
 import {
   getAuth,
@@ -44,6 +45,7 @@ interface AppContextType {
   setTimeEntries: (timeEntries: TimeEntry[]) => void;
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'userId'> & { createdAt?: string }) => void;
   addTimeEntry: (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => Promise<void>;
+  updateTimeEntry: (id: string, data: Partial<Omit<TimeEntry, 'id' | 'userId'>>) => Promise<void>;
   deleteTimeEntry: (timeEntryId: string) => Promise<void>;
   getProjectById: (id: string) => Project | undefined;
   getTimeEntriesByProjectId: (projectId: string) => TimeEntry[];
@@ -59,6 +61,10 @@ interface AppContextType {
   startTimer: (projectId: string, description: string) => void;
   stopTimer: () => void;
   elapsedTime: number;
+  isEditTimeEntryDialogOpen: boolean;
+  openEditTimeEntryDialog: (timeEntry: TimeEntry) => void;
+  closeEditTimeEntryDialog: () => void;
+  editingTimeEntry: TimeEntry | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -84,16 +90,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const router = useRouter();
 
+  const [isEditTimeEntryDialogOpen, setIsEditTimeEntryDialogOpen] = useState(false);
+  const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntry | null>(null);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
       if (!firebaseUser) {
-        router.push('/login');
+        // Handled by the effect below
       }
     });
     return () => unsubscribe();
-  }, [router]);
+  }, []);
 
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
@@ -189,6 +198,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [timeEntries, toast, user]);
 
+  const updateTimeEntry = async (id: string, data: Partial<Omit<TimeEntry, 'id' | 'userId'>>) => {
+    if (!user) return;
+    try {
+      const timeEntryRef = doc(db, 'timeEntries', id);
+      await updateDoc(timeEntryRef, data);
+      toast({
+        title: 'Time Entry Updated',
+        description: 'Your changes have been saved.',
+      });
+    } catch (e) {
+      console.error('Error updating time entry: ', e);
+      toast({
+        title: 'Error Updating Entry',
+        description: 'There was an issue saving your changes. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+
   const deleteTimeEntry = async (timeEntryId: string) => {
     if (!user) return;
     try {
@@ -231,6 +260,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const closeLogPracticeDialog = () => {
     setIsLogPracticeDialogOpen(false);
+  };
+
+  const openEditTimeEntryDialog = (timeEntry: TimeEntry) => {
+    setEditingTimeEntry(timeEntry);
+    setIsEditTimeEntryDialogOpen(true);
+  };
+  
+  const closeEditTimeEntryDialog = () => {
+    setIsEditTimeEntryDialogOpen(false);
+    setEditingTimeEntry(null);
   };
   
   const getOrCreateInternalActivitiesProject = useCallback(async () => {
@@ -338,6 +377,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setTimeEntries,
     addProject,
     addTimeEntry,
+    updateTimeEntry,
     deleteTimeEntry,
     getProjectById,
     getTimeEntriesByProjectId,
@@ -352,7 +392,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     timer,
     startTimer,
     stopTimer,
-    elapsedTime
+    elapsedTime,
+    isEditTimeEntryDialogOpen,
+    openEditTimeEntryDialog,
+    closeEditTimeEntryDialog,
+    editingTimeEntry
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

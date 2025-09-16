@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { differenceInMilliseconds, isToday, parseISO, format as formatDate, startOfToday, isSameDay } from 'date-fns';
-import { Plus, Download, Trash2, Calendar as CalendarIcon, BookOpen } from 'lucide-react';
+import { Plus, Download, Trash2, Calendar as CalendarIcon, BookOpen, Edit } from 'lucide-react';
 import { Bar, BarChart, XAxis, YAxis, Tooltip } from 'recharts';
 
 import { useAppContext } from '@/contexts/app-context';
@@ -27,6 +27,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { WeeklyReport } from '@/components/weekly-report';
+import { EditTimeEntryDialog } from '@/components/edit-time-entry-dialog';
 
 
 const chartConfig = {
@@ -37,7 +38,18 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export default function DashboardPage() {
-  const { projects, timeEntries, openLogTimeDialog, user, deleteTimeEntry, openLogPracticeDialog } = useAppContext();
+  const { 
+    projects, 
+    timeEntries, 
+    openLogTimeDialog, 
+    user, 
+    deleteTimeEntry, 
+    openLogPracticeDialog,
+    isEditTimeEntryDialogOpen,
+    closeEditTimeEntryDialog,
+    openEditTimeEntryDialog,
+    editingTimeEntry 
+  } = useAppContext();
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -140,6 +152,7 @@ export default function DashboardPage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -249,6 +262,9 @@ export default function DashboardPage() {
                         <div className="text-sm font-medium text-right">
                             {formatTotalDuration(differenceInMilliseconds(parseISO(entry.endTime), parseISO(entry.startTime)))}
                         </div>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditTimeEntryDialog(entry)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -279,5 +295,13 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
+    {editingTimeEntry && (
+        <EditTimeEntryDialog
+            open={isEditTimeEntryDialogOpen}
+            onOpenChange={closeEditTimeEntryDialog}
+            timeEntry={editingTimeEntry}
+        />
+    )}
+    </>
   );
 }

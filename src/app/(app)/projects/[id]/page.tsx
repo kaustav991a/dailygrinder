@@ -12,6 +12,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { formatDuration } from '@/lib/utils';
 import type { TimeEntry } from '@/lib/types';
 import { TaskSuggester } from '@/components/task-suggester';
+import { EditTimeEntryDialog } from '@/components/edit-time-entry-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function ProjectPage() {
   const { id } = useParams();
@@ -20,7 +32,11 @@ export default function ProjectPage() {
     getProjectById, 
     getTimeEntriesByProjectId, 
     openLogTimeDialog, 
-    deleteTimeEntry
+    deleteTimeEntry,
+    openEditTimeEntryDialog,
+    closeEditTimeEntryDialog,
+    isEditTimeEntryDialogOpen,
+    editingTimeEntry
   } = useAppContext();
   
   const [isClient, setIsClient] = useState(false);
@@ -43,6 +59,7 @@ export default function ProjectPage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -85,9 +102,28 @@ export default function ProjectPage() {
                     <div className="text-sm font-medium">
                       {formatDuration(differenceInMilliseconds(new Date(entry.endTime), new Date(entry.startTime)))}
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteTimeEntry(entry.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditTimeEntryDialog(entry)}>
+                      <Edit className="h-4 w-4" />
                     </Button>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete this time entry.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteTimeEntry(entry.id)}>Delete</AlertDialogAction>
+                        </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               ))}
@@ -98,5 +134,13 @@ export default function ProjectPage() {
         </CardContent>
       </Card>
     </div>
+    {editingTimeEntry && (
+        <EditTimeEntryDialog
+            open={isEditTimeEntryDialogOpen}
+            onOpenChange={closeEditTimeEntryDialog}
+            timeEntry={editingTimeEntry}
+        />
+    )}
+    </>
   );
 }
