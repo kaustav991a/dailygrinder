@@ -71,6 +71,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const DAILY_LIMIT_HOURS = 8;
+const TIMER_STORAGE_KEY = 'dailyGrindTimer';
 const auth = getAuth(app);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
@@ -94,6 +95,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isEditTimeEntryDialogOpen, setIsEditTimeEntryDialogOpen] = useState(false);
   const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntry | null>(null);
 
+  // Restore timer from localStorage on initial load
+  useEffect(() => {
+    try {
+      const savedTimer = localStorage.getItem(TIMER_STORAGE_KEY);
+      if (savedTimer) {
+        const parsedTimer: TimerState = JSON.parse(savedTimer);
+        if (parsedTimer.running && parsedTimer.startTime) {
+          setTimer(parsedTimer);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to parse timer from localStorage", error);
+      localStorage.removeItem(TIMER_STORAGE_KEY);
+    }
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
@@ -112,6 +129,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     await signOut(auth);
     setTimer({ running: false, startTime: null, projectId: null, description: null });
+    localStorage.removeItem(TIMER_STORAGE_KEY);
   };
   
   useEffect(() => {
@@ -329,12 +347,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const startTimer = (projectId: string, description: string) => {
     if (!timer.running) {
-        setTimer({
+        const newTimerState = {
             running: true,
             startTime: new Date().toISOString(),
             projectId,
             description,
-        });
+        };
+        setTimer(newTimerState);
+        try {
+          localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(newTimerState));
+        } catch (error) {
+          console.error("Failed to save timer to localStorage", error);
+        }
+
         const project = projects.find(p => p.id === projectId);
         if (project?.name !== 'Internal Activities') {
           router.push('/focus');
@@ -361,6 +386,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             projectId: null,
             description: null,
         });
+        try {
+          localStorage.removeItem(TIMER_STORAGE_KEY);
+        } catch (error) {
+          console.error("Failed to remove timer from localStorage", error);
+        }
         router.replace('/');
     }
   }, [timer, addTimeEntry, toast, router]);
