@@ -169,8 +169,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <WeeklyReport />
-
       <Card>
         <CardHeader>
           <CardTitle>Total for {formatDate(selectedDate, 'MMMM d')}</CardTitle>
@@ -264,9 +262,10 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+      
+      <WeeklyReport />
+
     </div>
     </>
   );
 }
-
-    
