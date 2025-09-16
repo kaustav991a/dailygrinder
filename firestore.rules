@@ -1,0 +1,26 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Projects: Allow users to read and write their own projects.
+    match /projects/{projectId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Time Entries: Allow users to read and write their own time entries.
+    match /timeEntries/{timeEntryId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Allow creating projects and time entries if the user is logged in and the userId matches their own.
+    match /projects/{projectId} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /timeEntries/{timeEntryId} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
