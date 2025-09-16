@@ -5,8 +5,8 @@ import React from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FormProvider, useFormContext } from "react-hook-form";
 import { z } from "zod";
-import { CalendarIcon, Play } from 'lucide-react';
-import { format, set, parse as parseDate } from 'date-fns';
+import { CalendarIcon, Play, BookOpen } from 'lucide-react';
+import { format, set } from 'date-fns';
 
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
@@ -33,13 +33,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAppContext } from "@/contexts/app-context";
@@ -48,8 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 const timeRegex = /^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$/; // HH:mm format
 
 const manualFormSchema = z.object({
-  projectId: z.string().min(1, "Please select a project."),
-  description: z.string().min(1, "Please describe what you worked on."),
+  description: z.string().min(1, "Please describe what you practiced."),
   startDate: z.date({ required_error: "Start date is required." }),
   startTime: z.string().regex(timeRegex, "Invalid time format (HH:mm)."),
   endDate: z.date({ required_error: "End date is required." }),
@@ -64,14 +56,12 @@ const manualFormSchema = z.object({
 });
 
 const timerFormSchema = z.object({
-  projectId: z.string().min(1, "Please select a project."),
-  description: z.string().min(1, "Please describe what you worked on."),
+  description: z.string().min(1, "Please describe what you are practicing."),
 });
 
-type LogTimeDialogProps = {
+type LogPracticeDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultProjectId?: string;
 };
 
 const DialogFormContext = React.createContext<{ onOpenChange: (open: boolean) => void; } | null>(null);
@@ -84,32 +74,31 @@ function useDialogFormContext() {
   return context;
 }
 
-function ManualTimeForm() {
-  const { projects, addTimeEntry } = useAppContext();
+function ManualPracticeForm() {
+  const { addTimeEntry, getOrCreatePracticeProject } = useAppContext();
   const { toast } = useToast();
-  const { control, handleSubmit, reset, watch } = useFormContext<z.infer<typeof manualFormSchema>>();
+  const { control, handleSubmit, reset } = useFormContext<z.infer<typeof manualFormSchema>>();
   const { onOpenChange } = useDialogFormContext();
 
-  const projectId = watch("projectId");
-
   async function onSubmit(values: z.infer<typeof manualFormSchema>) {
+    const practiceProjectId = await getOrCreatePracticeProject();
+    if (!practiceProjectId) return;
+
     const startDateTime = set(values.startDate, { hours: parseInt(values.startTime.split(':')[0]), minutes: parseInt(values.startTime.split(':')[1]) });
     const endDateTime = set(values.endDate, { hours: parseInt(values.endTime.split(':')[0]), minutes: parseInt(values.endTime.split(':')[1]) });
 
     await addTimeEntry({
-      projectId: values.projectId,
+      projectId: practiceProjectId,
       description: values.description,
       startTime: startDateTime.toISOString(),
       endTime: endDateTime.toISOString()
     });
 
-    const projectName = projects.find(p => p.id === values.projectId)?.name;
     toast({
-      title: "Time logged",
-      description: `Your time for "${projectName}" has been successfully logged.`,
+      title: "Practice logged",
+      description: `Your practice session has been successfully logged.`,
     });
     reset({
-        projectId: projectId || "",
         description: "",
         startDate: new Date(),
         startTime: format(new Date(), "HH:mm"),
@@ -121,7 +110,7 @@ function ManualTimeForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
-      <SharedProjectAndDescriptionFields />
+      <SharedPracticeDescriptionField control={control} />
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <FormLabel>Start Date</FormLabel>
@@ -227,92 +216,63 @@ function ManualTimeForm() {
         </div>
       </div>
       <DialogFooter>
-        <Button type="submit">Log Time</Button>
+        <Button type="submit">Log Practice</Button>
       </DialogFooter>
     </form>
   )
 }
 
-function TimerForm() {
-    const { startTimer, timer } = useAppContext();
+function TimerPracticeForm() {
+    const { startTimer, timer, getOrCreatePracticeProject } = useAppContext();
     const { handleSubmit, watch, control } = useFormContext<z.infer<typeof timerFormSchema>>();
     const { onOpenChange } = useDialogFormContext();
 
     const values = watch();
 
-    const handleStartTimer = () => {
-        startTimer(values.projectId, values.description);
+    const handleStartTimer = async () => {
+        const practiceProjectId = await getOrCreatePracticeProject();
+        if (!practiceProjectId) return;
+        startTimer(practiceProjectId, values.description);
         onOpenChange(false);
     };
 
     return (
         <form onSubmit={handleSubmit(handleStartTimer)} className="space-y-4 pt-4">
-            <SharedProjectAndDescriptionFields control={control} />
+            <SharedPracticeDescriptionField control={control} />
             <DialogFooter>
                 <Button type="submit" disabled={timer.running}>
                     <Play className="mr-2" />
-                    {timer.running ? 'Timer is already running' : 'Start Timer'}
+                    {timer.running ? 'Timer is already running' : 'Start Practice Timer'}
                 </Button>
             </DialogFooter>
         </form>
     );
 }
 
-const SharedProjectAndDescriptionFields = () => {
-  const { projects } = useAppContext();
-  const { control } = useFormContext();
-
+const SharedPracticeDescriptionField = ({ control }: { control: any }) => {
   return (
-    <>
-      <FormField
-        control={control}
-        name="projectId"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Project</FormLabel>
-            <Select onValueChange={field.onChange} value={field.value}>
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a project" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {projects.filter(p => p.name !== 'Practice').map(project => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
+    <FormField
         control={control}
         name="description"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Work Description</FormLabel>
+            <FormLabel>Practice Description</FormLabel>
             <FormControl>
-              <Textarea placeholder="e.g., Implemented the login feature" {...field} />
+              <Textarea placeholder="e.g., Practiced React hooks, studied database normalization" {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
         )}
       />
-    </>
   );
 };
 
-
-export function LogTimeDialog({ open, onOpenChange, defaultProjectId }: LogTimeDialogProps) {
+export function LogPracticeDialog({ open, onOpenChange }: LogPracticeDialogProps) {
   const [activeTab, setActiveTab] = React.useState("timer");
 
   const manualForm = useForm<z.infer<typeof manualFormSchema>>({
     resolver: zodResolver(manualFormSchema),
     defaultValues: {
-      projectId: "",
       description: "",
       startDate: new Date(),
       startTime: format(new Date(), "HH:mm"),
@@ -324,7 +284,6 @@ export function LogTimeDialog({ open, onOpenChange, defaultProjectId }: LogTimeD
   const timerForm = useForm<z.infer<typeof timerFormSchema>>({
     resolver: zodResolver(timerFormSchema),
     defaultValues: {
-      projectId: "",
       description: "",
     },
   });
@@ -333,7 +292,6 @@ export function LogTimeDialog({ open, onOpenChange, defaultProjectId }: LogTimeD
     if (open) {
       const now = new Date();
       manualForm.reset({
-        projectId: defaultProjectId || "",
         description: "",
         startDate: now,
         startTime: format(now, "HH:mm"),
@@ -341,11 +299,10 @@ export function LogTimeDialog({ open, onOpenChange, defaultProjectId }: LogTimeD
         endTime: format(now, "HH:mm"),
       });
       timerForm.reset({
-        projectId: defaultProjectId || "",
         description: "",
       })
     }
-  }, [open, defaultProjectId, manualForm, timerForm]);
+  }, [open, manualForm, timerForm]);
   
   const dialogFormContextValue = { onOpenChange };
 
@@ -353,9 +310,9 @@ export function LogTimeDialog({ open, onOpenChange, defaultProjectId }: LogTimeD
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle>Log Time Entry</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><BookOpen /> Log Practice Session</DialogTitle>
           <DialogDescription>
-            Use the timer to track time as you work, or log it manually.
+            Track time spent on learning, practice, or personal development.
           </DialogDescription>
         </DialogHeader>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -366,14 +323,14 @@ export function LogTimeDialog({ open, onOpenChange, defaultProjectId }: LogTimeD
             <TabsContent value="timer">
                 <DialogFormContext.Provider value={dialogFormContextValue}>
                     <FormProvider {...timerForm}>
-                        <TimerForm />
+                        <TimerPracticeForm />
                     </FormProvider>
                 </DialogFormContext.Provider>
             </TabsContent>
             <TabsContent value="manual">
                  <DialogFormContext.Provider value={dialogFormContextValue}>
                     <FormProvider {...manualForm}>
-                        <ManualTimeForm />
+                        <ManualPracticeForm />
                     </FormProvider>
                 </DialogFormContext.Provider>
             </TabsContent>

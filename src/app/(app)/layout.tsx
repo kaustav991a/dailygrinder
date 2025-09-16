@@ -28,6 +28,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { Logo } from "@/components/icons";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { LogTimeDialog } from "@/components/log-time-dialog";
+import { LogPracticeDialog } from "@/components/log-practice-dialog";
 import type { Project } from "@/lib/types";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     isLogTimeDialogOpen, 
     closeLogTimeDialog, 
     logTimeDialogDefaultProjectId,
+    isLogPracticeDialogOpen,
+    closeLogPracticeDialog,
     timer,
     stopTimer,
     elapsedTime,
@@ -52,10 +55,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setIsClient(true);
-    if (!loading && !user) {
-        router.push('/login');
-    }
-  }, [user, loading, router]);
+  }, []);
   
   useEffect(() => {
     const observer = new ResizeObserver(entries => {
@@ -83,9 +83,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   const groupProjectsByDate = (projects: Project[]) => {
-    const sortedProjects = projects.sort((a, b) => 
-      compareDesc(parseISO(a.createdAt || new Date().toISOString()), parseISO(b.createdAt || new Date().toISOString()))
-    );
+    const sortedProjects = projects
+      .filter(p => p.name !== "Practice") // Exclude 'Practice' project
+      .sort((a, b) => 
+        compareDesc(parseISO(a.createdAt || new Date().toISOString()), parseISO(b.createdAt || new Date().toISOString()))
+      );
 
     const groups = sortedProjects.reduce((acc, project) => {
       const projectDate = parseISO(project.createdAt || new Date().toISOString());
@@ -121,18 +123,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
   return (
     <SidebarProvider>
       <Sidebar>
@@ -160,7 +150,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           
           <SidebarSeparator />
 
-            {isClient && projects.length === 0 && (
+            {isClient && groupedProjects.length === 0 && (
                 <SidebarGroup>
                     <SidebarGroupLabel>Projects</SidebarGroupLabel>
                     <div className="p-2 text-sm text-muted-foreground">
@@ -239,6 +229,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           }
         }} 
         defaultProjectId={logTimeDialogDefaultProjectId} 
+      />
+      <LogPracticeDialog
+        open={isLogPracticeDialogOpen}
+        onOpenChange={(open) => {
+            if (!open) {
+                closeLogPracticeDialog();
+            }
+        }}
       />
     </SidebarProvider>
   );

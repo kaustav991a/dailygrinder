@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { differenceInMilliseconds, isToday, parseISO, format as formatDate, startOfToday, isSameDay } from 'date-fns';
-import { Plus, Download, Trash2, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, Download, Trash2, Calendar as CalendarIcon, BookOpen } from 'lucide-react';
 import { Bar, BarChart, XAxis, YAxis, Tooltip } from 'recharts';
 
 import { useAppContext } from '@/contexts/app-context';
@@ -37,7 +37,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export default function DashboardPage() {
-  const { projects, timeEntries, openLogTimeDialog, user, deleteTimeEntry } = useAppContext();
+  const { projects, timeEntries, openLogTimeDialog, user, deleteTimeEntry, openLogPracticeDialog } = useAppContext();
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -160,9 +160,12 @@ export default function DashboardPage() {
                     />
                 </PopoverContent>
             </Popover>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <Button onClick={handleExport} disabled={timeEntries.length === 0}>
                     <Download className="mr-2 h-4 w-4" /> Export
+                </Button>
+                <Button onClick={() => openLogPracticeDialog()}>
+                    <BookOpen className="mr-2 h-4 w-4" /> Practice
                 </Button>
                 <Button onClick={() => openLogTimeDialog()}>
                     <Plus className="mr-2 h-4 w-4" /> Log Time

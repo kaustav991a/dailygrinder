@@ -9,6 +9,7 @@ import {
   onSnapshot, 
   query, 
   where,
+  getDocs,
   deleteDoc,
   doc
 } from 'firebase/firestore';
@@ -42,7 +43,7 @@ interface AppContextType {
   timeEntries: TimeEntry[];
   setTimeEntries: (timeEntries: TimeEntry[]) => void;
   addProject: (project: Omit<Project, 'id' | 'createdAt' | 'userId'> & { createdAt?: string }) => void;
-  addTimeEntry: (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => void;
+  addTimeEntry: (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => Promise<void>;
   deleteTimeEntry: (timeEntryId: string) => Promise<void>;
   getProjectById: (id: string) => Project | undefined;
   getTimeEntriesByProjectId: (projectId: string) => TimeEntry[];
@@ -50,6 +51,10 @@ interface AppContextType {
   openLogTimeDialog: (defaultProjectId?: string) => void;
   closeLogTimeDialog: () => void;
   logTimeDialogDefaultProjectId?: string;
+  isLogPracticeDialogOpen: boolean;
+  openLogPracticeDialog: () => void;
+  closeLogPracticeDialog: () => void;
+  getOrCreatePracticeProject: () => Promise<string | undefined>;
   timer: TimerState;
   startTimer: (projectId: string, description: string) => void;
   stopTimer: () => void;
@@ -68,6 +73,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [isLogTimeDialogOpen, setIsLogTimeDialogOpen] = useState(false);
   const [logTimeDialogDefaultProjectId, setLogTimeDialogDefaultProjectId] = useState<string | undefined>();
+  const [isLogPracticeDialogOpen, setIsLogPracticeDialogOpen] = useState(false);
   const [timer, setTimer] = useState<TimerState>({
     running: false,
     startTime: null,
@@ -215,7 +221,49 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setIsLogTimeDialogOpen(false);
     setLogTimeDialogDefaultProjectId(undefined);
   };
+
+  const openLogPracticeDialog = () => {
+    setIsLogPracticeDialogOpen(true);
+  };
+
+  const closeLogPracticeDialog = () => {
+    setIsLogPracticeDialogOpen(false);
+  };
   
+  const getOrCreatePracticeProject = useCallback(async () => {
+    if (!user) return;
+    const practiceProject = projects.find(p => p.name === 'Practice' && p.userId === user.uid);
+    if (practiceProject) {
+      return practiceProject.id;
+    }
+
+    // Check firestore just in case
+    const q = query(collection(db, 'projects'), where('userId', '==', user.uid), where('name', '==', 'Practice'));
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].id;
+    }
+
+    // Create it if it doesn't exist
+    try {
+      const docRef = await addDoc(collection(db, 'projects'), {
+        name: 'Practice',
+        description: 'Time spent on practice and learning.',
+        userId: user.uid,
+        createdAt: new Date().toISOString(),
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Error creating practice project:", error);
+      toast({
+        title: "Error",
+        description: "Could not create the internal Practice project. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [user, projects, toast]);
+
   const startTimer = (projectId: string, description: string) => {
     if (!timer.running) {
         setTimer({
@@ -228,10 +276,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const stopTimer = useCallback(() => {
+  const stopTimer = useCallback(async () => {
     if (timer.running && timer.startTime && timer.projectId && timer.description) {
         const endTime = new Date().toISOString();
-        addTimeEntry({
+        await addTimeEntry({
             projectId: timer.projectId,
             description: timer.description,
             startTime: timer.startTime,
@@ -283,6 +331,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     openLogTimeDialog,
     closeLogTimeDialog,
     logTimeDialogDefaultProjectId,
+    isLogPracticeDialogOpen,
+    openLogPracticeDialog,
+    closeLogPracticeDialog,
+    getOrCreatePracticeProject,
     timer,
     startTimer,
     stopTimer,
@@ -299,5 +351,3 @@ export const useAppContext = () => {
   }
   return context;
 };
-
-    
