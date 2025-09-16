@@ -6,7 +6,6 @@ import { Timer, Square } from 'lucide-react';
 import { useAppContext } from '@/contexts/app-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AmbientSoundPlayer } from '@/components/ambient-sound-player';
 
 export default function FocusPage() {
   const { timer, elapsedTime, stopTimer, projects } = useAppContext();
@@ -35,9 +34,6 @@ export default function FocusPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
-      <div className="absolute top-4 right-4">
-        <AmbientSoundPlayer />
-      </div>
       <Card className="w-full max-w-2xl text-center shadow-2xl">
         <CardHeader>
           <div className="flex items-center justify-center gap-2 text-primary">
