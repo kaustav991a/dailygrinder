@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { differenceInMilliseconds, isToday, parseISO, format as formatDate, startOfToday, isSameDay } from 'date-fns';
 import { Plus, Download, Trash2, Calendar as CalendarIcon, BookOpen, Edit } from 'lucide-react';
 import { Bar, BarChart, XAxis, YAxis, Tooltip } from 'recharts';
@@ -58,13 +58,14 @@ export default function DashboardPage() {
     setIsClient(true);
   }, []);
 
-  const selectedDayEntries = isClient 
-    ? timeEntries
+  const selectedDayEntries = useMemo(() => {
+    if (!isClient) return [];
+    return timeEntries
         .filter(entry => entry.startTime && isSameDay(parseISO(entry.startTime), selectedDate))
         .sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()) 
-    : [];
+  }, [timeEntries, selectedDate, isClient]);
 
-  const totalSelectedDayDurationMs = calculateTotalDuration(selectedDayEntries);
+  const totalSelectedDayDurationMs = useMemo(() => calculateTotalDuration(selectedDayEntries), [selectedDayEntries]);
 
   const formatTotalDuration = (milliseconds: number) => {
     const hours = Math.floor(milliseconds / (1000 * 60 * 60));
@@ -73,17 +74,20 @@ export default function DashboardPage() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const projectTimeData = isClient ? projects.map(project => {
-    const projectEntries = selectedDayEntries.filter(entry => entry.projectId === project.id);
-    const duration = projectEntries.reduce((acc, entry) => {
-      if (!entry.startTime || !entry.endTime) return acc;
-      return acc + differenceInMilliseconds(parseISO(entry.endTime), parseISO(entry.startTime));
-    }, 0);
-    return {
-      name: project.name,
-      duration: duration / (1000 * 60), // in minutes
-    };
-  }).filter(p => p.duration > 0) : [];
+  const projectTimeData = useMemo(() => {
+    if (!isClient) return [];
+    return projects.map(project => {
+        const projectEntries = selectedDayEntries.filter(entry => entry.projectId === project.id);
+        const duration = projectEntries.reduce((acc, entry) => {
+        if (!entry.startTime || !entry.endTime) return acc;
+        return acc + differenceInMilliseconds(parseISO(entry.endTime), parseISO(entry.startTime));
+        }, 0);
+        return {
+        name: project.name,
+        duration: duration / (1000 * 60), // in minutes
+        };
+    }).filter(p => p.duration > 0);
+  }, [projects, selectedDayEntries, isClient]);
 
   const handleExport = () => {
     if (timeEntries.length === 0) {
