@@ -103,9 +103,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         label,
         projects: Array.from(projectSet).sort((a, b) => a.name.localeCompare(b.name))
       }))
-      .sort(([labelA]: any, [labelB]: any) => {
-          const dateA = labelA === 'Today' ? startOfDay(new Date()) : labelA === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(labelA);
-          const dateB = labelB === 'Today' ? startOfDay(new Date()) : labelB === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(labelB);
+      .sort((a, b) => {
+          const dateA = a.label === 'Today' ? startOfDay(new Date()) : a.label === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(a.label);
+          const dateB = b.label === 'Today' ? startOfDay(new Date()) : b.label === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(b.label);
           return compareDesc(dateA, dateB);
       });
   };
