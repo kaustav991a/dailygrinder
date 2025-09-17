@@ -29,11 +29,12 @@ import { Logo } from "@/components/icons";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import { LogTimeDialog } from "@/components/log-time-dialog";
 import { LogPracticeDialog } from "@/components/log-practice-dialog";
-import type { Project } from "@/lib/types";
+import type { Project, TimeEntry } from "@/lib/types";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { 
     projects, 
+    timeEntries,
     isLogTimeDialogOpen, 
     closeLogTimeDialog, 
     logTimeDialogDefaultProjectId,
@@ -63,22 +64,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return `${h}:${m}:${s}`;
   };
 
-  const groupProjectsByDate = (projects: Project[]) => {
-    const sortedProjects = projects
-      .filter(p => p.name !== "Internal Activities") // Exclude 'Internal Activities' project
-      .sort((a, b) => 
-        compareDesc(parseISO(a.createdAt || new Date().toISOString()), parseISO(b.createdAt || new Date().toISOString()))
-      );
+  const groupProjectsByDate = (projects: Project[], timeEntries: TimeEntry[]) => {
+    const projectActivityMap = new Map<string, string>();
 
-    const groups = sortedProjects.reduce((acc, project) => {
-      const projectDate = parseISO(project.createdAt || new Date().toISOString());
+    // Find the latest activity date for each project
+    timeEntries.forEach(entry => {
+      const existingDate = projectActivityMap.get(entry.projectId);
+      if (!existingDate || new Date(entry.startTime) > new Date(existingDate)) {
+        projectActivityMap.set(entry.projectId, entry.startTime);
+      }
+    });
+    
+    // Create a new array with project and its latest activity date
+    const projectsWithActivity = projects
+        .filter(p => p.name !== "Internal Activities")
+        .map(project => {
+            const latestActivityDateISO = projectActivityMap.get(project.id);
+            const latestDate = latestActivityDateISO ? parseISO(latestActivityDateISO) : parseISO(project.createdAt);
+            return { ...project, latestActivityDate: latestDate };
+        })
+        .sort((a, b) => compareDesc(a.latestActivityDate, b.latestActivityDate));
+
+
+    const groups = projectsWithActivity.reduce((acc, project) => {
+      const activityDate = project.latestActivityDate;
       let groupLabel: string;
-      if (isToday(projectDate)) {
+      
+      if (isToday(activityDate)) {
         groupLabel = "Today";
-      } else if (isYesterday(projectDate)) {
+      } else if (isYesterday(activityDate)) {
         groupLabel = "Yesterday";
       } else {
-        groupLabel = format(projectDate, 'MMMM d, yyyy');
+        groupLabel = format(activityDate, 'MMMM d, yyyy');
       }
       
       if (!acc[groupLabel]) {
@@ -97,7 +114,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     });
   };
   
-  const groupedProjects = isClient ? groupProjectsByDate(projects) : [];
+  const groupedProjects = isClient ? groupProjectsByDate(projects, timeEntries) : [];
 
   // Hide layout for focus mode
   if (pathname === '/focus') {
