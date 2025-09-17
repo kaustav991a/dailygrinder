@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { PlusCircle, LayoutDashboard, Timer, Square, LogOut } from "lucide-react";
-import { format, isToday, isYesterday, parseISO, compareDesc } from 'date-fns';
+import { format, isToday, isYesterday, parseISO, compareDesc, startOfDay } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -64,57 +64,53 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return `${h}:${m}:${s}`;
   };
 
-  const groupProjectsByDate = (projects: Project[], timeEntries: TimeEntry[]) => {
-    const projectActivityMap = new Map<string, string>();
-
-    // Find the latest activity date for each project
-    timeEntries.forEach(entry => {
-      const existingDate = projectActivityMap.get(entry.projectId);
-      if (!existingDate || new Date(entry.startTime) > new Date(existingDate)) {
-        projectActivityMap.set(entry.projectId, entry.startTime);
-      }
-    });
+  const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry[]) => {
+    const projectMap = new Map<string, Project>(projects.map(p => [p.id, p]));
+    const groups: Record<string, Set<Project>> = {};
     
-    // Create a new array with project and its latest activity date
-    const projectsWithActivity = projects
-        .filter(p => p.name !== "Internal Activities")
-        .map(project => {
-            const latestActivityDateISO = projectActivityMap.get(project.id);
-            const latestDate = latestActivityDateISO ? parseISO(latestActivityDateISO) : parseISO(project.createdAt);
-            return { ...project, latestActivityDate: latestDate };
-        })
-        .sort((a, b) => compareDesc(a.latestActivityDate, b.latestActivityDate));
-
-
-    const groups = projectsWithActivity.reduce((acc, project) => {
-      const activityDate = project.latestActivityDate;
-      let groupLabel: string;
-      
-      if (isToday(activityDate)) {
-        groupLabel = "Today";
-      } else if (isYesterday(activityDate)) {
-        groupLabel = "Yesterday";
-      } else {
-        groupLabel = format(activityDate, 'MMMM d, yyyy');
-      }
-      
-      if (!acc[groupLabel]) {
-        acc[groupLabel] = [];
-      }
-      acc[groupLabel].push(project);
-      return acc;
-    }, {} as Record<string, Project[]>);
-
-    return Object.entries(groups).sort(([labelA], [labelB]) => {
-      if (labelA === 'Today') return -1;
-      if (labelB === 'Today') return 1;
-      if (labelA === 'Yesterday' && labelB !== 'Today') return -1;
-      if (labelB === 'Yesterday' && labelA !== 'Today') return 1;
-      return compareDesc(new Date(labelA), new Date(labelB));
+    // Get all unique project IDs from time entries
+    const activeProjectIds = new Set(timeEntries.map(entry => entry.projectId));
+    
+    // Initialize groups with projects that have no time entries under a 'No Activity' group
+    // or handle them as you see fit. For now, we only show projects with activity.
+  
+    timeEntries.forEach(entry => {
+        if (projectMap.get(entry.projectId)?.name === "Internal Activities") return;
+        
+        const activityDate = parseISO(entry.startTime);
+        let groupLabel: string;
+    
+        if (isToday(activityDate)) {
+            groupLabel = "Today";
+        } else if (isYesterday(activityDate)) {
+            groupLabel = "Yesterday";
+        } else {
+            groupLabel = format(activityDate, 'MMMM d, yyyy');
+        }
+    
+        if (!groups[groupLabel]) {
+            groups[groupLabel] = new Set();
+        }
+    
+        const project = projectMap.get(entry.projectId);
+        if (project) {
+            groups[groupLabel].add(project);
+        }
     });
+
+    return Object.entries(groups)
+      .map(([label, projectSet]) => ({
+        label,
+        projects: Array.from(projectSet).sort((a, b) => a.name.localeCompare(b.name))
+      }))
+      .sort(([labelA]: any, [labelB]: any) => {
+          const dateA = labelA === 'Today' ? startOfDay(new Date()) : labelA === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(labelA);
+          const dateB = labelB === 'Today' ? startOfDay(new Date()) : labelB === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(labelB);
+          return compareDesc(dateA, dateB);
+      });
   };
   
-  const groupedProjects = isClient ? groupProjectsByDate(projects, timeEntries) : [];
+  const groupedProjects = isClient ? groupProjectsByActivityDate(projects, timeEntries) : [];
 
   // Hide layout for focus mode
   if (pathname === '/focus') {
@@ -157,11 +153,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarGroup>
             )}
 
-            {isClient && groupedProjects.map(([groupLabel, projectsInGroup]) => (
-                <SidebarGroup key={groupLabel}>
-                    <SidebarGroupLabel>{groupLabel}</SidebarGroupLabel>
+            {isClient && groupedProjects.map(({ label, projects }) => (
+                <SidebarGroup key={label}>
+                    <SidebarGroupLabel>{label}</SidebarGroupLabel>
                     <SidebarMenu className="px-0">
-                    {projectsInGroup.map(project => (
+                    {projects.map(project => (
                         <SidebarMenuItem key={project.id}>
                         <Link href={`/projects/${project.id}`}>
                             <SidebarMenuButton 
