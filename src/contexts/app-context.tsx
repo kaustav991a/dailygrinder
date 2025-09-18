@@ -395,7 +395,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     logTimeDialogDefaultProjectId,
     openLogPracticeDialog,
     closeLogPracticeDialog,
-    isLogPracticeDialogOpen,
+isLogPracticeDialogOpen,
     getOrCreateInternalActivitiesProject
   };
 

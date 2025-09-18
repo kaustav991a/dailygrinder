@@ -28,6 +28,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { WeeklyReport } from '@/components/weekly-report';
 import { EditTimeEntryDialog } from '@/components/edit-time-entry-dialog';
+import { LogPracticeDialog } from '@/components/log-practice-dialog';
+import { LogTimeDialog } from '@/components/log-time-dialog';
 
 
 const chartConfig = {
@@ -45,10 +47,15 @@ export default function DashboardPage() {
     user, 
     deleteTimeEntry, 
     openLogPracticeDialog,
+    isLogPracticeDialogOpen,
+    closeLogPracticeDialog,
     isEditTimeEntryDialogOpen,
     closeEditTimeEntryDialog,
     openEditTimeEntryDialog,
-    editingTimeEntry 
+    editingTimeEntry,
+    isLogTimeDialogOpen,
+    closeLogTimeDialog,
+    logTimeDialogDefaultProjectId
   } = useAppContext();
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
@@ -308,6 +315,12 @@ export default function DashboardPage() {
             timeEntry={editingTimeEntry}
         />
     )}
+     <LogPracticeDialog open={isLogPracticeDialogOpen} onOpenChange={closeLogPracticeDialog} />
+     <LogTimeDialog
+        open={isLogTimeDialogOpen}
+        onOpenChange={closeLogTimeDialog}
+        defaultProjectId={logTimeDialogDefaultProjectId}
+    />
     </>
   );
 }
