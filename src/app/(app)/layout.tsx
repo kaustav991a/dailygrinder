@@ -32,40 +32,46 @@ import { LogPracticeDialog } from "@/components/log-practice-dialog";
 import type { Project, TimeEntry } from "@/lib/types";
 
 const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry[]) => {
-  const projectMap = new Map<string, Project>(projects.map(p => [p.id, p]));
-  const groups: Record<string, Set<Project>> = {};
-  const activeProjectIds = new Set<string>();
-
-  // Group projects with time entries by date
+  const timeEntriesByProject = new Map<string, TimeEntry[]>();
   timeEntries.forEach(entry => {
-    if (projectMap.get(entry.projectId)?.name === "Internal Activities") return;
+    if (!timeEntriesByProject.has(entry.projectId)) {
+      timeEntriesByProject.set(entry.projectId, []);
+    }
+    timeEntriesByProject.get(entry.projectId)!.push(entry);
+  });
 
-    activeProjectIds.add(entry.projectId);
-    const activityDate = parseISO(entry.startTime);
+  const getMostRecentDate = (project: Project): Date => {
+    const entries = timeEntriesByProject.get(project.id);
+    if (entries && entries.length > 0) {
+      return entries.reduce((latest, entry) => {
+        const entryDate = parseISO(entry.startTime);
+        return entryDate > latest ? entryDate : latest;
+      }, new Date(0));
+    }
+    return parseISO(project.createdAt);
+  };
+  
+  const groups: Record<string, Set<Project>> = {};
+  
+  projects.forEach(project => {
+    if (project.name === "Internal Activities") return;
+
+    const mostRecentDate = getMostRecentDate(project);
     let groupLabel: string;
 
-    if (isToday(activityDate)) {
+    if (isToday(mostRecentDate)) {
       groupLabel = "Today";
-    } else if (isYesterday(activityDate)) {
+    } else if (isYesterday(mostRecentDate)) {
       groupLabel = "Yesterday";
     } else {
-      groupLabel = format(activityDate, 'MMMM d, yyyy');
+      groupLabel = format(mostRecentDate, 'MMMM d, yyyy');
     }
 
     if (!groups[groupLabel]) {
       groups[groupLabel] = new Set();
     }
-    const project = projectMap.get(entry.projectId);
-    if (project) {
-      groups[groupLabel].add(project);
-    }
+    groups[groupLabel].add(project);
   });
-
-  // Group projects with no time entries
-  const inactiveProjects = projects.filter(p => !activeProjectIds.has(p.id) && p.name !== "Internal Activities");
-  if (inactiveProjects.length > 0) {
-      groups["No Activity"] = new Set(inactiveProjects);
-  }
 
   return Object.entries(groups)
     .map(([label, projectSet]) => ({
@@ -73,8 +79,6 @@ const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry
       projects: Array.from(projectSet).sort((a, b) => a.name.localeCompare(b.name))
     }))
     .sort((a, b) => {
-        if (a.label === 'No Activity') return 1;
-        if (b.label === 'No Activity') return -1;
         const dateA = a.label === 'Today' ? startOfDay(new Date()) : a.label === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(a.label);
         const dateB = b.label === 'Today' ? startOfDay(new Date()) : b.label === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(b.label);
         return compareDesc(dateA, dateB);
