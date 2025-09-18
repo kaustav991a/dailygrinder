@@ -1,12 +1,11 @@
 
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { PlusCircle, LayoutDashboard, Timer, Square, LogOut } from "lucide-react";
-import { format, isToday, isYesterday, parseISO, compareDesc, startOfDay } from 'date-fns';
+import { PlusCircle, LayoutDashboard, LogOut } from "lucide-react";
+import { format, isToday, isYesterday, parseISO, compareDesc } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -19,7 +18,6 @@ import {
   SidebarMenuButton,
   SidebarGroup,
   SidebarGroupLabel,
-  SidebarInset,
   SidebarFooter,
   SidebarSeparator,
   SidebarTrigger,
@@ -27,8 +25,6 @@ import {
 import { useAppContext } from "@/contexts/app-context";
 import { Logo } from "@/components/icons";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
-import { LogTimeDialog } from "@/components/log-time-dialog";
-import { LogPracticeDialog } from "@/components/log-practice-dialog";
 import type { Project, TimeEntry } from "@/lib/types";
 
 const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry[]) => {
@@ -84,9 +80,13 @@ const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry
         if (b.label === 'Today') return 1;
         if (a.label === 'Yesterday') return -1;
         if (b.label === 'Yesterday') return 1;
-        const dateA = new Date(a.label);
-        const dateB = new Date(b.label);
-        return compareDesc(dateA, dateB);
+        try {
+            const dateA = new Date(a.label);
+            const dateB = new Date(b.label);
+            return compareDesc(dateA, dateB);
+        } catch (e) {
+            return 0;
+        }
     });
 };
 
@@ -94,11 +94,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { 
     projects, 
     timeEntries,
-    logout
+    logout,
+    openCreateProjectDialog,
+    isCreateProjectDialogOpen,
+    closeCreateProjectDialog,
   } = useAppContext();
   const pathname = usePathname();
-  const router = useRouter();
-  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -173,7 +174,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarContent>
 
         <SidebarFooter>
-          <Button variant="ghost" onClick={() => setCreateProjectOpen(true)}>
+          <Button variant="ghost" onClick={openCreateProjectDialog}>
             <PlusCircle className="mr-2" />
             New Project
           </Button>
@@ -197,7 +198,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </main>
       
-      <CreateProjectDialog open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
+      <CreateProjectDialog open={isCreateProjectDialogOpen} onOpenChange={closeCreateProjectDialog} />
     </SidebarProvider>
   );
 }
+
+    

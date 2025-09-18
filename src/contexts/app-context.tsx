@@ -23,7 +23,7 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import { db, app } from '@/lib/firebase';
-import type { Project, TimeEntry, Team } from '@/lib/types';
+import type { Project, TimeEntry } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface AppContextType {
@@ -31,16 +31,41 @@ interface AppContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-  teams: Team[];
-  selectedTeamId: string | null;
-  setSelectedTeamId: (teamId: string) => void;
   projects: Project[];
-  addProject: (project: Omit<Project, 'id' | 'userId' | 'teamId' | 'createdAt'> & { createdAt?: string }) => Promise<void>;
+  addProject: (project: Omit<Project, 'id' | 'userId' | 'createdAt'> & { createdAt?: string }) => Promise<void>;
+  updateProject: (projectId: string, project: Partial<Omit<Project, 'id'>>) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   isCreateProjectDialogOpen: boolean;
-  setIsCreateProjectDialogOpen: (open: boolean) => void;
+  openCreateProjectDialog: () => void;
+  closeCreateProjectDialog: () => void;
+  isEditProjectDialogOpen: boolean;
+  openEditProjectDialog: (project: Project) => void;
+  closeEditProjectDialog: () => void;
+  editingProject: Project | null;
   timeEntries: TimeEntry[];
   addTimeEntry: (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => Promise<void>;
+  deleteTimeEntry: (timeEntryId: string) => Promise<void>;
+  updateTimeEntry: (timeEntryId: string, timeEntry: Partial<Omit<TimeEntry, 'id'>>) => Promise<void>;
+  isEditTimeEntryDialogOpen: boolean;
+  openEditTimeEntryDialog: (timeEntry: TimeEntry) => void;
+  closeEditTimeEntryDialog: () => void;
+  editingTimeEntry: TimeEntry | null;
+  timer: {
+    running: boolean;
+    projectId: string | null;
+    description: string;
+  };
+  elapsedTime: number;
+  startTimer: (projectId: string, description: string) => void;
+  stopTimer: () => void;
+  openLogTimeDialog: () => void;
+  closeLogTimeDialog: () => void;
+  isLogTimeDialogOpen: boolean;
+  logTimeDialogDefaultProjectId?: string;
+  openLogPracticeDialog: () => void;
+  closeLogPracticeDialog: () => void;
+  isLogPracticeDialogOpen: boolean;
+  getOrCreateInternalActivitiesProject: () => Promise<string | null>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -49,94 +74,68 @@ const auth = getAuth(app);
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [selectedTeamId, setSelectedTeamIdState] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
-  const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] = useState(false);
   
+  const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] = useState(false);
+  const [isEditProjectDialogOpen, setIsEditProjectDialogOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  
+  const [isLogTimeDialogOpen, setIsLogTimeDialogOpen] = useState(false);
+  const [logTimeDialogDefaultProjectId, setLogTimeDialogDefaultProjectId] = useState<string | undefined>();
+
+  const [isLogPracticeDialogOpen, setIsLogPracticeDialogOpen] = useState(false);
+
+  const [isEditTimeEntryDialogOpen, setIsEditTimeEntryDialogOpen] = useState(false);
+  const [editingTimeEntry, setEditingTimeEntry] = useState<TimeEntry | null>(null);
+
+  const [timer, setTimer] = useState({ running: false, projectId: null, description: '' });
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
   const { toast } = useToast();
   const router = useRouter();
 
-  const setSelectedTeamId = (teamId: string) => {
-    setSelectedTeamIdState(teamId);
-    localStorage.setItem('selectedTeamId', teamId);
-  };
-  
+  // Timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (timer.running && startTime) {
+      interval = setInterval(() => {
+        setElapsedTime(Math.floor((new Date().getTime() - startTime.getTime()) / 1000));
+      }, 1000);
+    } else if (!timer.running) {
+      if (interval) clearInterval(interval);
+      setElapsedTime(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [timer.running, startTime]);
+
   // Auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
       if (!firebaseUser) {
-        setTeams([]);
         setProjects([]);
         setTimeEntries([]);
-        setSelectedTeamIdState(null);
-        localStorage.removeItem('selectedTeamId');
         router.push('/login');
       }
     });
     return () => unsubscribe();
   }, [router]);
 
-  // Fetch user's teams
+  // Fetch projects and time entries for the user
   useEffect(() => {
-    if (!user) return;
-  
-    const teamsQuery = query(collection(db, 'teams'), where('memberIds', 'array-contains', user.uid));
-    const unsubscribe = onSnapshot(teamsQuery, async (snapshot) => {
-      if (snapshot.empty) {
-        // Create a default team if user has none
-        const defaultTeamName = `${user.email?.split('@')[0] || 'My'}'s Team`;
-        try {
-          const docRef = await addDoc(collection(db, 'teams'), {
-            name: defaultTeamName,
-            ownerId: user.uid,
-            memberIds: [user.uid],
-          });
-          const newTeam = { id: docRef.id, name: defaultTeamName, ownerId: user.uid, memberIds: [user.uid] };
-          setTeams([newTeam]);
-          setSelectedTeamId(docRef.id);
-        } catch (error) {
-          console.error("Error creating default team: ", error);
-          toast({ title: "Error", description: "Could not create a default team.", variant: "destructive" });
-        }
-      } else {
-        const teamsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
-        setTeams(teamsData);
-        
-        const storedTeamId = localStorage.getItem('selectedTeamId');
-        const isValidStoredTeam = teamsData.some(team => team.id === storedTeamId);
-
-        if (isValidStoredTeam) {
-          setSelectedTeamIdState(storedTeamId);
-        } else if (teamsData.length > 0) {
-          setSelectedTeamId(teamsData[0].id);
-        }
-      }
-    }, (error) => {
-      console.error("Error fetching teams: ", error);
-      toast({ title: "Error fetching teams", description: error.message, variant: "destructive" });
-    });
-  
-    return () => unsubscribe();
-  }, [user, toast]);
-
-  // Fetch projects for the selected team
-  useEffect(() => {
-    if (!selectedTeamId || !user) {
-      setProjects([]);
-      return;
+    if (!user) {
+        setProjects([]);
+        setTimeEntries([]);
+        return;
     };
   
-    const projectsQuery = query(
-      collection(db, 'projects'), 
-      where('teamId', '==', selectedTeamId),
-      where('userId', '==', user.uid)
-    );
-
-    const unsubscribe = onSnapshot(projectsQuery, (snapshot) => {
+    const projectsQuery = query(collection(db, 'projects'), where('userId', '==', user.uid));
+    const projectsUnsubscribe = onSnapshot(projectsQuery, (snapshot) => {
         const projectsData = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() } as Project));
         setProjects(projectsData);
@@ -144,35 +143,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       console.error("Error fetching projects: ", error);
       toast({ title: "Error fetching projects", description: error.message, variant: "destructive" });
     });
-  
-    return () => unsubscribe();
-  }, [selectedTeamId, user, toast]);
 
-    // Fetch time entries for the selected team
-    useEffect(() => {
-      if (!user) {
-        setTimeEntries([]);
-        return;
-      };
-      // We need to get all time entries for all projects in all teams the user is a member of
-      // This is not efficient, but for now we will query all time entries for the user
-      // A better approach would be to query time entries per project, but that would require more state management
-      const timeEntriesQuery = query(
-          collection(db, 'timeEntries'),
-          where('userId', '==', user.uid)
-      );
+    const timeEntriesQuery = query(collection(db, 'timeEntries'), where('userId', '==', user.uid));
+    const timeEntriesUnsubscribe = onSnapshot(timeEntriesQuery, (snapshot) => {
+        const entriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeEntry));
+        setTimeEntries(entriesData);
+    }, (error) => {
+        console.error("Error fetching time entries: ", error);
+        toast({ title: "Error fetching time entries", description: error.message, variant: "destructive" });
+    });
   
-      const unsubscribe = onSnapshot(timeEntriesQuery, (snapshot) => {
-          const entriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeEntry));
-          setTimeEntries(entriesData);
-      }, (error) => {
-          console.error("Error fetching time entries: ", error);
-          toast({ title: "Error fetching time entries", description: error.message, variant: "destructive" });
-      });
-  
-      return () => unsubscribe();
+    return () => {
+        projectsUnsubscribe();
+        timeEntriesUnsubscribe();
+    };
   }, [user, toast]);
 
+  // --- Auth ---
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
   };
@@ -181,16 +168,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     await signOut(auth);
   };
   
-  const addProject = async (project: Omit<Project, 'id' | 'userId' | 'teamId' | 'createdAt'> & { createdAt?: string }) => {
-    if (!user || !selectedTeamId) {
-        toast({ title: "Error", description: "You must be logged in and have a team selected to add a project.", variant: "destructive" });
+  // --- Projects ---
+  const addProject = async (project: Omit<Project, 'id' | 'userId' | 'createdAt'> & { createdAt?: string }) => {
+    if (!user) {
+        toast({ title: "Error", description: "You must be logged in to add a project.", variant: "destructive" });
         return;
     }
     try {
       await addDoc(collection(db, 'projects'), {
         ...project,
         userId: user.uid,
-        teamId: selectedTeamId,
         createdAt: project.createdAt || new Date().toISOString()
       });
     } catch (e) {
@@ -199,30 +186,35 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateProject = async (projectId: string, project: Partial<Omit<Project, 'id'>>) => {
+    if (!user) return;
+    try {
+        const projectRef = doc(db, 'projects', projectId);
+        await updateDoc(projectRef, project);
+    } catch (e) {
+        console.error("Error updating project: ", e);
+        toast({ title: "Error", description: "There was an error updating your project.", variant: "destructive" });
+    }
+  };
+
   const deleteProject = async (projectId: string) => {
     if (!user) return;
     try {
         const batch = writeBatch(db);
-
-        // 1. Delete the project itself
         const projectRef = doc(db, 'projects', projectId);
         batch.delete(projectRef);
 
-        // 2. Find and delete all associated time entries
         const timeEntriesQuery = query(collection(db, 'timeEntries'), where('projectId', '==', projectId), where('userId', '==', user.uid));
         const timeEntriesSnapshot = await getDocs(timeEntriesQuery);
-        timeEntriesSnapshot.docs.forEach(doc => {
+        timeEntriesSnapshot.forEach(doc => {
             batch.delete(doc.ref);
         });
 
-        // Commit the batch
         await batch.commit();
-
         toast({
             title: 'Project Deleted',
             description: 'The project and all its time entries have been successfully removed.',
         });
-        router.push('/');
     } catch (e) {
         console.error('Error deleting project: ', e);
         toast({
@@ -233,6 +225,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // --- Time Entries ---
   const addTimeEntry = async (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => {
     if (!user) return;
     try {
@@ -246,21 +239,164 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const deleteTimeEntry = async (timeEntryId: string) => {
+    if (!user) return;
+    try {
+        await deleteDoc(doc(db, 'timeEntries', timeEntryId));
+        toast({ title: "Time entry deleted", description: "Your time entry has been successfully deleted." });
+    } catch (e) {
+        console.error('Error deleting time entry: ', e);
+        toast({ title: "Error deleting time entry", description: "There was an error deleting your time entry.", variant: "destructive" });
+    }
+  };
+
+  const updateTimeEntry = async (timeEntryId: string, timeEntry: Partial<Omit<TimeEntry, 'id'>>) => {
+      if (!user) return;
+      try {
+          const timeEntryRef = doc(db, 'timeEntries', timeEntryId);
+          await updateDoc(timeEntryRef, timeEntry);
+      } catch(e) {
+          console.error("Error updating time entry: ", e);
+          toast({ title: "Error", description: "There was an error updating your time entry.", variant: "destructive" });
+      }
+  };
+
+
+  // --- Dialogs ---
+  const openCreateProjectDialog = () => setIsCreateProjectDialogOpen(true);
+  const closeCreateProjectDialog = () => setIsCreateProjectDialogOpen(false);
+  
+  const openEditProjectDialog = (project: Project) => {
+    setEditingProject(project);
+    setIsEditProjectDialogOpen(true);
+  };
+  const closeEditProjectDialog = () => {
+    setIsEditProjectDialogOpen(false);
+    setEditingProject(null);
+  };
+  
+  const openLogTimeDialog = (projectId?: string) => {
+    setLogTimeDialogDefaultProjectId(projectId);
+    setIsLogTimeDialogOpen(true);
+  };
+  const closeLogTimeDialog = () => setIsLogTimeDialogOpen(false);
+
+  const openLogPracticeDialog = () => setIsLogPracticeDialogOpen(true);
+  const closeLogPracticeDialog = () => setIsLogPracticeDialogOpen(false);
+  
+  const openEditTimeEntryDialog = (timeEntry: TimeEntry) => {
+    setEditingTimeEntry(timeEntry);
+    setIsEditTimeEntryDialogOpen(true);
+  };
+  const closeEditTimeEntryDialog = () => {
+    setEditingTimeEntry(null);
+    setIsEditTimeEntryDialogOpen(false);
+  };
+
+  // --- Timer ---
+  const startTimer = (projectId: string, description: string) => {
+    if (timer.running) {
+      toast({ title: "Timer is already active", description: "You must stop the current timer before starting a new one.", variant: "destructive" });
+      return;
+    }
+    setTimer({ running: true, projectId, description });
+    setStartTime(new Date());
+    router.push('/focus');
+  };
+
+  const stopTimer = () => {
+    if (!timer.running || !startTime || !timer.projectId) return;
+
+    const endTime = new Date();
+    const newTimeEntry = {
+      projectId: timer.projectId,
+      description: timer.description,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+    };
+
+    addTimeEntry(newTimeEntry);
+    
+    toast({
+        title: "Time Logged",
+        description: `Your session for "${projects.find(p => p.id === timer.projectId)?.name}" has been logged.`,
+    });
+
+    setTimer({ running: false, projectId: null, description: '' });
+    setStartTime(null);
+    setElapsedTime(0);
+  };
+
+  // --- Internal Activities Project ---
+  const getOrCreateInternalActivitiesProject = async (): Promise<string | null> => {
+    if (!user) return null;
+
+    const internalProjectName = 'Internal Activities';
+    let internalProject = projects.find(p => p.name === internalProjectName);
+
+    if (internalProject) {
+        return internalProject.id;
+    }
+
+    try {
+        const q = query(collection(db, 'projects'), where('name', '==', internalProjectName), where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            return querySnapshot.docs[0].id;
+        } else {
+            const docRef = await addDoc(collection(db, 'projects'), {
+                name: internalProjectName,
+                description: "Tracks non-project work like practice, learning, and administrative tasks.",
+                userId: user.uid,
+                createdAt: new Date().toISOString()
+            });
+            return docRef.id;
+        }
+    } catch (e) {
+        console.error("Error getting or creating internal activities project: ", e);
+        toast({ title: "Error", description: "Could not get or create the internal activities project.", variant: "destructive" });
+        return null;
+    }
+  };
+
+
   const value = {
     user,
     loading,
     login,
     logout,
-    teams,
-    selectedTeamId,
-    setSelectedTeamId,
     projects,
     addProject,
+    updateProject,
     deleteProject,
     isCreateProjectDialogOpen,
-    setIsCreateProjectDialogOpen,
+    openCreateProjectDialog,
+    closeCreateProjectDialog,
+    isEditProjectDialogOpen,
+    openEditProjectDialog,
+    closeEditProjectDialog,
+    editingProject,
     timeEntries,
-    addTimeEntry
+    addTimeEntry,
+    deleteTimeEntry,
+    updateTimeEntry,
+    isEditTimeEntryDialogOpen,
+    openEditTimeEntryDialog,
+    closeEditTimeEntryDialog,
+    editingTimeEntry,
+    timer,
+    elapsedTime,
+    startTimer,
+    stopTimer,
+    openLogTimeDialog,
+    closeLogTimeDialog,
+    isLogTimeDialogOpen,
+    logTimeDialogDefaultProjectId,
+    openLogPracticeDialog,
+    closeLogPracticeDialog,
+    isLogPracticeDialogOpen,
+    getOrCreateInternalActivitiesProject
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
