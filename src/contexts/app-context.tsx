@@ -58,7 +58,7 @@ interface AppContextType {
   elapsedTime: number;
   startTimer: (projectId: string, description: string) => void;
   stopTimer: () => void;
-  openLogTimeDialog: () => void;
+  openLogTimeDialog: (projectId?: string) => void;
   closeLogTimeDialog: () => void;
   isLogTimeDialogOpen: boolean;
   logTimeDialogDefaultProjectId?: string;
@@ -361,7 +361,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
 
-  const value = {
+  const value: AppContextType = {
     user,
     loading,
     login,
@@ -409,5 +409,3 @@ export const useAppContext = () => {
   }
   return context;
 };
-
-    

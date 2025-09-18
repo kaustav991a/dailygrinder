@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { intervalToDuration, formatDuration as formatDurationFns } from 'date-fns';
+import { intervalToDuration, formatDuration as formatDurationFns, differenceInMilliseconds } from 'date-fns';
 import type { TimeEntry } from "./types";
 
 export function cn(...inputs: ClassValue[]) {
@@ -19,6 +19,13 @@ export function formatDuration(milliseconds: number): string {
   }).replace(/ (hour|minute|second)s?/g, (match, p1) => p1.charAt(0));
 }
 
+export function formatTotalDuration(milliseconds: number) {
+    const hours = Math.floor(milliseconds / (1000 * 60 * 60));
+    const minutes = Math.floor((milliseconds % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((milliseconds % (1000 * 60)) / 1000);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
 export function formatDurationForExport(milliseconds: number): string {
     if (milliseconds < 1000) {
       return '0 mins';
@@ -35,6 +42,7 @@ export function formatDurationForExport(milliseconds: number): string {
 
 export function calculateTotalDuration(timeEntries: TimeEntry[]): number {
   return timeEntries.reduce((total, entry) => {
+    if (!entry.startTime || !entry.endTime) return total;
     const start = new Date(entry.startTime);
     const end = new Date(entry.endTime);
     return total + (end.getTime() - start.getTime());
