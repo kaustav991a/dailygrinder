@@ -52,14 +52,15 @@ export default function DashboardPage() {
   } = useAppContext();
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
     setIsClient(true);
+    setSelectedDate(new Date());
   }, []);
 
   const selectedDayEntries = useMemo(() => {
-    if (!isClient) return [];
+    if (!isClient || !selectedDate) return [];
     return timeEntries
         .filter(entry => entry.startTime && isSameDay(parseISO(entry.startTime), selectedDate))
         .sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()) 
@@ -137,6 +138,7 @@ export default function DashboardPage() {
   const userName = user?.email?.split('@')[0].split('.')[0].toUpperCase() || 'there';
 
   const getDateDescription = () => {
+    if (!selectedDate) return '...';
     if (isToday(selectedDate)) return "today";
     return `on ${formatDate(selectedDate, 'PPP')}`;
   }
@@ -151,8 +153,8 @@ export default function DashboardPage() {
     return `${hours} hr ${remainingMinutes} min`;
   };
 
-  if (!isClient) {
-    return null;
+  if (!isClient || !selectedDate) {
+    return null; // Or a loading spinner
   }
 
   return (
@@ -309,3 +311,5 @@ export default function DashboardPage() {
     </>
   );
 }
+
+    
