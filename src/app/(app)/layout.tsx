@@ -48,6 +48,7 @@ const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry
         return entryDate > latest ? entryDate : latest;
       }, new Date(0));
     }
+    // If no entries, use the project's creation date
     return parseISO(project.createdAt);
   };
   
@@ -79,8 +80,12 @@ const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry
       projects: Array.from(projectSet).sort((a, b) => a.name.localeCompare(b.name))
     }))
     .sort((a, b) => {
-        const dateA = a.label === 'Today' ? startOfDay(new Date()) : a.label === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(a.label);
-        const dateB = b.label === 'Today' ? startOfDay(new Date()) : b.label === 'Yesterday' ? startOfDay(new Date(Date.now() - 86400000)) : new Date(b.label);
+        if (a.label === 'Today') return -1;
+        if (b.label === 'Today') return 1;
+        if (a.label === 'Yesterday') return -1;
+        if (b.label === 'Yesterday') return 1;
+        const dateA = new Date(a.label);
+        const dateB = new Date(b.label);
         return compareDesc(dateA, dateB);
     });
 };
@@ -89,16 +94,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { 
     projects, 
     timeEntries,
-    isLogTimeDialogOpen, 
-    closeLogTimeDialog, 
-    logTimeDialogDefaultProjectId,
-    isLogPracticeDialogOpen,
-    closeLogPracticeDialog,
-    timer,
-    stopTimer,
-    elapsedTime,
-    user,
-    loading,
     logout
   } = useAppContext();
   const pathname = usePathname();
@@ -114,13 +109,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!isClient) return [];
     return groupProjectsByActivityDate(projects, timeEntries);
   }, [projects, timeEntries, isClient]);
-
-  const formatElapsedTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-    return `${h}:${m}:${s}`;
-  };
 
   // Hide layout for focus mode
   if (pathname === '/focus') {
@@ -192,27 +180,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset>
+      <main className="flex-1">
         <header className="flex items-center justify-between px-4 md:px-6 py-3 border-b" style={{ height: '65px' }}>
           <div className="flex items-center gap-2">
             <SidebarTrigger className="md:hidden" />
           </div>
           <div className="flex items-center gap-4">
-            {isClient && timer.running && timer.projectId && (
-              <div className="flex items-center gap-2 md:gap-4">
-                <div className="flex items-center gap-2">
-                  <Timer className="w-5 h-5 text-primary" />
-                  <div className="text-sm">
-                    <p className="font-semibold">{projects.find(p => p.id === timer.projectId)?.name}</p>
-                    <p className="font-mono text-muted-foreground">{formatElapsedTime(elapsedTime)}</p>
-                  </div>
-                </div>
-                <Button size="sm" onClick={stopTimer}>
-                  <Square className="mr-2 hidden md:block" />
-                  Stop
-                </Button>
-              </div>
-            )}
              <Button variant="ghost" onClick={logout}>
               <LogOut className="mr-2 hidden md:block" />
               Logout
@@ -222,26 +195,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="p-4 md:p-6">
             {children}
         </div>
-      </SidebarInset>
+      </main>
       
       <CreateProjectDialog open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
-      <LogTimeDialog 
-        open={isLogTimeDialogOpen} 
-        onOpenChange={(open) => {
-          if (!open) {
-            closeLogTimeDialog();
-          }
-        }} 
-        defaultProjectId={logTimeDialogDefaultProjectId} 
-      />
-      <LogPracticeDialog
-        open={isLogPracticeDialogOpen}
-        onOpenChange={(open) => {
-            if (!open) {
-                closeLogPracticeDialog();
-            }
-        }}
-      />
     </SidebarProvider>
   );
 }
