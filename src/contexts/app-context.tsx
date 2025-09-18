@@ -39,6 +39,8 @@ interface AppContextType {
   deleteProject: (projectId: string) => Promise<void>;
   isCreateProjectDialogOpen: boolean;
   setIsCreateProjectDialogOpen: (open: boolean) => void;
+  timeEntries: TimeEntry[];
+  addTimeEntry: (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -50,6 +52,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamIdState] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] = useState(false);
   
   const { toast } = useToast();
@@ -68,6 +71,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (!firebaseUser) {
         setTeams([]);
         setProjects([]);
+        setTimeEntries([]);
         setSelectedTeamIdState(null);
         localStorage.removeItem('selectedTeamId');
         router.push('/login');
@@ -129,7 +133,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const projectsQuery = query(
       collection(db, 'projects'), 
       where('teamId', '==', selectedTeamId),
-      where('userId', '==', user.uid) // Ensure user only sees their projects within a team
+      where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(projectsQuery, (snapshot) => {
@@ -143,6 +147,31 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   
     return () => unsubscribe();
   }, [selectedTeamId, user, toast]);
+
+    // Fetch time entries for the selected team
+    useEffect(() => {
+      if (!user) {
+        setTimeEntries([]);
+        return;
+      };
+      // We need to get all time entries for all projects in all teams the user is a member of
+      // This is not efficient, but for now we will query all time entries for the user
+      // A better approach would be to query time entries per project, but that would require more state management
+      const timeEntriesQuery = query(
+          collection(db, 'timeEntries'),
+          where('userId', '==', user.uid)
+      );
+  
+      const unsubscribe = onSnapshot(timeEntriesQuery, (snapshot) => {
+          const entriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeEntry));
+          setTimeEntries(entriesData);
+      }, (error) => {
+          console.error("Error fetching time entries: ", error);
+          toast({ title: "Error fetching time entries", description: error.message, variant: "destructive" });
+      });
+  
+      return () => unsubscribe();
+  }, [user, toast]);
 
   const login = async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
@@ -164,8 +193,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         teamId: selectedTeamId,
         createdAt: project.createdAt || new Date().toISOString()
       });
-      toast({ title: "Project Created", description: `"${project.name}" has been successfully created.`});
-      setIsCreateProjectDialogOpen(false);
     } catch (e) {
       console.error("Error adding document: ", e);
       toast({ title: "Error", description: "There was an error saving your project.", variant: "destructive" });
@@ -182,9 +209,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         batch.delete(projectRef);
 
         // 2. Find and delete all associated time entries
-        const timeEntriesQuery = query(collection(db, 'timeEntries'), where('projectId', '==', projectId));
+        const timeEntriesQuery = query(collection(db, 'timeEntries'), where('projectId', '==', projectId), where('userId', '==', user.uid));
         const timeEntriesSnapshot = await getDocs(timeEntriesQuery);
-        timeEntriesSnapshot.forEach(doc => {
+        timeEntriesSnapshot.docs.forEach(doc => {
             batch.delete(doc.ref);
         });
 
@@ -206,6 +233,19 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const addTimeEntry = async (timeEntry: Omit<TimeEntry, 'id' | 'userId'>) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'timeEntries'), {
+        ...timeEntry,
+        userId: user.uid,
+      });
+    } catch (e) {
+      console.error('Error adding time entry: ', e);
+      toast({ title: "Error logging time", description: "There was an error saving your time entry.", variant: "destructive" });
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -219,6 +259,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     deleteProject,
     isCreateProjectDialogOpen,
     setIsCreateProjectDialogOpen,
+    timeEntries,
+    addTimeEntry
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -231,3 +273,5 @@ export const useAppContext = () => {
   }
   return context;
 };
+
+    
