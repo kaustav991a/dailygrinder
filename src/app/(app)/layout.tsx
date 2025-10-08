@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { PlusCircle, LayoutDashboard, LogOut } from "lucide-react";
-import { format, isToday, isYesterday, parseISO, compareDesc } from 'date-fns';
+import { format, isToday, isYesterday, parseISO, compareDesc, isSameDay, differenceInMilliseconds } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { Logo } from "@/components/icons";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
 import type { Project, TimeEntry } from "@/lib/types";
+import { formatTotalDuration } from "@/lib/utils";
 
 const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry[]) => {
   const timeEntriesByProject = new Map<string, TimeEntry[]>();
@@ -44,11 +45,10 @@ const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry
         return entryDate > latest ? entryDate : latest;
       }, new Date(0));
     }
-    // If no entries, use the project's creation date
     return parseISO(project.createdAt);
   };
   
-  const groups: Record<string, Set<Project>> = {};
+  const groups: Record<string, { projects: Set<Project>, date: Date }> = {};
   
   projects.forEach(project => {
     if (project.name === "Internal Activities") return;
@@ -65,16 +65,25 @@ const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry
     }
 
     if (!groups[groupLabel]) {
-      groups[groupLabel] = new Set();
+      groups[groupLabel] = { projects: new Set(), date: mostRecentDate };
     }
-    groups[groupLabel].add(project);
+    groups[groupLabel].projects.add(project);
   });
 
   return Object.entries(groups)
-    .map(([label, projectSet]) => ({
-      label,
-      projects: Array.from(projectSet).sort((a, b) => a.name.localeCompare(b.name))
-    }))
+    .map(([label, { projects: projectSet, date }]) => {
+      const dailyEntries = timeEntries.filter(entry => isSameDay(parseISO(entry.startTime), date));
+      const totalDuration = dailyEntries.reduce((acc, entry) => {
+        if (!entry.startTime || !entry.endTime) return acc;
+        return acc + differenceInMilliseconds(parseISO(entry.endTime), parseISO(entry.startTime));
+      }, 0);
+
+      return {
+        label,
+        projects: Array.from(projectSet).sort((a, b) => a.name.localeCompare(b.name)),
+        totalDuration,
+      };
+    })
     .sort((a, b) => {
         if (a.label === 'Today') return -1;
         if (b.label === 'Today') return 1;
@@ -152,9 +161,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </SidebarGroup>
             )}
 
-            {isClient && groupedProjects.map(({ label, projects }) => (
+            {isClient && groupedProjects.map(({ label, projects, totalDuration }) => (
                 <SidebarGroup key={label}>
-                    <SidebarGroupLabel>{label}</SidebarGroupLabel>
+                    <SidebarGroupLabel className="flex justify-between items-center">
+                      <span>{label}</span>
+                      {totalDuration > 0 && (
+                        <span className="text-xs font-mono text-muted-foreground">
+                          {formatTotalDuration(totalDuration)}
+                        </span>
+                      )}
+                    </SidebarGroupLabel>
                     <SidebarMenu className="px-0">
                     {projects.map(project => (
                         <SidebarMenuItem key={project.id}>
@@ -202,5 +218,3 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </SidebarProvider>
   );
 }
-
-    
