@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import { differenceInMilliseconds, isToday, parseISO, format as formatDate, startOfToday, isSameDay } from 'date-fns';
+import { differenceInMilliseconds, isToday, parseISO, format as formatDate, startOfToday, isSameDay, subWeeks, subMonths, isWithinInterval } from 'date-fns';
 import { Plus, Download, Trash2, Calendar as CalendarIcon, BookOpen, Edit } from 'lucide-react';
 import { Bar, BarChart, XAxis, YAxis, Tooltip } from 'recharts';
 
@@ -25,6 +25,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Calendar } from '@/components/ui/calendar';
 import { WeeklyReport } from '@/components/weekly-report';
 import { EditTimeEntryDialog } from '@/components/edit-time-entry-dialog';
@@ -97,18 +103,45 @@ export default function DashboardPage() {
     }).filter(p => p.duration > 0);
   }, [projects, selectedDayEntries, isClient]);
 
-  const handleExport = () => {
-    if (timeEntries.length === 0) {
+  const handleExport = (range: 'day' | 'week' | 'month' | '3-months' | '6-months' | 'all') => {
+    let entriesToExport: TimeEntry[] = [];
+    const now = new Date();
+
+    switch(range) {
+        case 'day':
+            if (selectedDate) {
+                entriesToExport = timeEntries.filter(entry => isSameDay(parseISO(entry.startTime), selectedDate));
+            }
+            break;
+        case 'week':
+            entriesToExport = timeEntries.filter(entry => isWithinInterval(parseISO(entry.startTime), { start: subWeeks(now, 1), end: now }));
+            break;
+        case 'month':
+            entriesToExport = timeEntries.filter(entry => isWithinInterval(parseISO(entry.startTime), { start: subMonths(now, 1), end: now }));
+            break;
+        case '3-months':
+            entriesToExport = timeEntries.filter(entry => isWithinInterval(parseISO(entry.startTime), { start: subMonths(now, 3), end: now }));
+            break;
+        case '6-months':
+            entriesToExport = timeEntries.filter(entry => isWithinInterval(parseISO(entry.startTime), { start: subMonths(now, 6), end: now }));
+            break;
+        case 'all':
+            entriesToExport = timeEntries;
+            break;
+    }
+
+
+    if (entriesToExport.length === 0) {
       toast({
         title: 'No Time Entries to Export',
-        description: 'You must have at least one time entry to export.',
+        description: 'No time entries found for the selected period.',
         variant: 'destructive',
       });
       return;
     }
 
     const headers = ['Project Name', 'Date', 'Task Description', 'Duration'];
-    const sortedEntries = [...timeEntries].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    const sortedEntries = [...entriesToExport].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     
     const csvRows = [
       headers.join(','),
@@ -132,13 +165,13 @@ export default function DashboardPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'time_entries.csv');
+    link.setAttribute('download', `time_entries_${range}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     toast({
       title: 'Time Entries Exported',
-      description: 'Your time entries have been successfully exported to time_entries.csv.',
+      description: `Your time entries have been successfully exported to time_entries_${range}.csv.`,
     });
   };
 
@@ -196,9 +229,22 @@ export default function DashboardPage() {
                 </PopoverContent>
             </Popover>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Button onClick={handleExport} disabled={timeEntries.length === 0}>
-                    <Download className="mr-2 h-4 w-4" /> Export
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button disabled={timeEntries.length === 0}>
+                      <Download className="mr-2 h-4 w-4" /> Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleExport('day')}>This Day</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('week')}>This Week</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('month')}>This Month</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('3-months')}>Last 3 Months</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('6-months')}>Last 6 Months</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('all')}>All Time</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <Button onClick={() => openLogPracticeDialog()}>
                     <BookOpen className="mr-2 h-4 w-4" /> Practice
                 </Button>
@@ -324,5 +370,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    
