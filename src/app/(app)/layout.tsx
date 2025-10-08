@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { PlusCircle, LayoutDashboard, LogOut } from "lucide-react";
-import { format, isToday, isYesterday, parseISO, compareDesc, isSameDay, differenceInMilliseconds } from 'date-fns';
+import { format, isToday, isYesterday, parseISO, compareDesc, startOfDay, differenceInMilliseconds } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,75 +29,66 @@ import type { Project, TimeEntry } from "@/lib/types";
 import { formatTotalDuration } from "@/lib/utils";
 
 const groupProjectsByActivityDate = (projects: Project[], timeEntries: TimeEntry[]) => {
-  const timeEntriesByProject = new Map<string, TimeEntry[]>();
-  timeEntries.forEach(entry => {
-    if (!timeEntriesByProject.has(entry.projectId)) {
-      timeEntriesByProject.set(entry.projectId, []);
-    }
-    timeEntriesByProject.get(entry.projectId)!.push(entry);
-  });
+  const dailyGroups: Record<string, { projects: Set<Project>, entries: TimeEntry[] }> = {};
 
-  const getMostRecentDate = (project: Project): Date => {
-    const entries = timeEntriesByProject.get(project.id);
-    if (entries && entries.length > 0) {
-      return entries.reduce((latest, entry) => {
-        const entryDate = parseISO(entry.startTime);
-        return entryDate > latest ? entryDate : latest;
-      }, new Date(0));
+  // Group time entries by day
+  timeEntries.forEach(entry => {
+    const entryDate = startOfDay(parseISO(entry.startTime));
+    const entryDateKey = entryDate.toISOString();
+    const project = projects.find(p => p.id === entry.projectId && p.name !== "Internal Activities");
+
+    if (project) {
+      if (!dailyGroups[entryDateKey]) {
+        dailyGroups[entryDateKey] = { projects: new Set(), entries: [] };
+      }
+      dailyGroups[entryDateKey].projects.add(project);
+      dailyGroups[entryDateKey].entries.push(entry);
     }
-    return parseISO(project.createdAt);
-  };
+  });
   
-  const groups: Record<string, { projects: Set<Project>, date: Date }> = {};
-  
+  // Handle projects with no time entries, grouping them by creation date
   projects.forEach(project => {
     if (project.name === "Internal Activities") return;
-
-    const mostRecentDate = getMostRecentDate(project);
-    let groupLabel: string;
-
-    if (isToday(mostRecentDate)) {
-      groupLabel = "Today";
-    } else if (isYesterday(mostRecentDate)) {
-      groupLabel = "Yesterday";
-    } else {
-      groupLabel = format(mostRecentDate, 'MMMM d, yyyy');
+    const hasEntries = timeEntries.some(entry => entry.projectId === project.id);
+    if (!hasEntries) {
+      const creationDate = startOfDay(parseISO(project.createdAt));
+      const creationDateKey = creationDate.toISOString();
+      if (!dailyGroups[creationDateKey]) {
+        dailyGroups[creationDateKey] = { projects: new Set(), entries: [] };
+      }
+      dailyGroups[creationDateKey].projects.add(project);
     }
-
-    if (!groups[groupLabel]) {
-      groups[groupLabel] = { projects: new Set(), date: mostRecentDate };
-    }
-    groups[groupLabel].projects.add(project);
   });
 
-  return Object.entries(groups)
-    .map(([label, { projects: projectSet, date }]) => {
-      const dailyEntries = timeEntries.filter(entry => isSameDay(parseISO(entry.startTime), date));
-      const totalDuration = dailyEntries.reduce((acc, entry) => {
+
+  return Object.entries(dailyGroups)
+    .map(([dateKey, { projects: projectSet, entries }]) => {
+      const date = parseISO(dateKey);
+      let label: string;
+
+      if (isToday(date)) {
+        label = "Today";
+      } else if (isYesterday(date)) {
+        label = "Yesterday";
+      } else {
+        label = format(date, 'MMMM d, yyyy');
+      }
+
+      const totalDuration = entries.reduce((acc, entry) => {
         if (!entry.startTime || !entry.endTime) return acc;
         return acc + differenceInMilliseconds(parseISO(entry.endTime), parseISO(entry.startTime));
       }, 0);
 
       return {
         label,
+        date: date,
         projects: Array.from(projectSet).sort((a, b) => a.name.localeCompare(b.name)),
         totalDuration,
       };
     })
-    .sort((a, b) => {
-        if (a.label === 'Today') return -1;
-        if (b.label === 'Today') return 1;
-        if (a.label === 'Yesterday') return -1;
-        if (b.label === 'Yesterday') return 1;
-        try {
-            const dateA = new Date(a.label);
-            const dateB = new Date(b.label);
-            return compareDesc(dateA, dateB);
-        } catch (e) {
-            return 0;
-        }
-    });
+    .sort((a, b) => compareDesc(a.date, b.date));
 };
+
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { 
