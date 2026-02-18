@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, FormProvider, useFormContext } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { CalendarIcon, Edit } from 'lucide-react';
 import { format, set, parseISO } from 'date-fns';
@@ -48,6 +48,7 @@ const timeRegex = /^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$/; // HH:mm format
 
 const formSchema = z.object({
   projectId: z.string().min(1, "Please select a project."),
+  activityType: z.string().optional(),
   description: z.string().min(1, "Please describe what you worked on."),
   startDate: z.date({ required_error: "Start date is required." }),
   startTime: z.string().regex(timeRegex, "Invalid time format (HH:mm)."),
@@ -76,21 +77,23 @@ export function EditTimeEntryDialog({ open, onOpenChange, timeEntry }: EditTimeE
 
   const isInternal = timeEntry.projectId === internalProject?.id;
 
-  const [activityType, description] = useMemo(() => {
+  const [initialActivityType, initialDescription] = useMemo(() => {
     if (isInternal) {
       const parts = timeEntry.description.split(': ');
       if (parts.length > 1) {
         return [parts[0], parts.slice(1).join(': ')];
       }
+      return ["Practicing", timeEntry.description];
     }
-    return [null, timeEntry.description];
+    return [undefined, timeEntry.description];
   }, [timeEntry.description, isInternal]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       projectId: timeEntry.projectId,
-      description: description,
+      activityType: initialActivityType,
+      description: initialDescription,
       startDate: parseISO(timeEntry.startTime),
       startTime: format(parseISO(timeEntry.startTime), "HH:mm"),
       endDate: parseISO(timeEntry.endTime),
@@ -99,30 +102,30 @@ export function EditTimeEntryDialog({ open, onOpenChange, timeEntry }: EditTimeE
   });
 
   useEffect(() => {
-    const [newActivityType, newDescription] = isInternal ?
-        (timeEntry.description.split(': ').length > 1 ? [timeEntry.description.split(': ')[0], timeEntry.description.split(': ').slice(1).join(': ')] : [null, timeEntry.description])
-        : [null, timeEntry.description];
+    if (open) {
+      const [newActivityType, newDescription] = isInternal ?
+        (timeEntry.description.split(': ').length > 1 ? [timeEntry.description.split(': ')[0], timeEntry.description.split(': ').slice(1).join(': ')] : ["Practicing", timeEntry.description])
+        : [undefined, timeEntry.description];
 
-    form.reset({
+      form.reset({
         projectId: timeEntry.projectId,
+        activityType: newActivityType,
         description: newDescription,
         startDate: parseISO(timeEntry.startTime),
         startTime: format(parseISO(timeEntry.startTime), "HH:mm"),
         endDate: parseISO(timeEntry.endTime),
         endTime: format(parseISO(timeEntry.endTime), "HH:mm"),
-    });
-    // We don't have a field for activityType in the form schema, so we manage it separately
-    // but we can set a default value in a state if needed
-  }, [timeEntry, form, isInternal]);
+      });
+    }
+  }, [timeEntry, form, isInternal, open]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const startDateTime = set(values.startDate, { hours: parseInt(values.startTime.split(':')[0]), minutes: parseInt(values.startTime.split(':')[1]) });
     const endDateTime = set(values.endDate, { hours: parseInt(values.endTime.split(':')[0]), minutes: parseInt(values.endTime.split(':')[1]) });
 
     let finalDescription = values.description;
-    if (values.projectId === internalProject?.id) {
-        const selectedActivityType = (document.querySelector('[name="activityType"]') as HTMLSelectElement)?.value || activityType;
-        finalDescription = `${selectedActivityType}: ${values.description}`;
+    if (values.projectId === internalProject?.id && values.activityType) {
+        finalDescription = `${values.activityType}: ${values.description}`;
     }
 
     await updateTimeEntry(timeEntry.id, {
@@ -152,9 +155,13 @@ export function EditTimeEntryDialog({ open, onOpenChange, timeEntry }: EditTimeE
         <FormProvider {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             {isInternal ? (
-                <FormItem>
-                    <FormLabel>Activity Type</FormLabel>
-                    <Select name="activityType" defaultValue={activityType || undefined}>
+                <FormField
+                    control={form.control}
+                    name="activityType"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Activity Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                             <SelectTrigger>
                             <SelectValue placeholder="Select an activity type" />
@@ -164,8 +171,11 @@ export function EditTimeEntryDialog({ open, onOpenChange, timeEntry }: EditTimeE
                             <SelectItem value="Practicing">Practicing</SelectItem>
                             <SelectItem value="Checking">Checking</SelectItem>
                         </SelectContent>
-                    </Select>
-                </FormItem>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
             ) : (
                 <FormField
                     control={form.control}

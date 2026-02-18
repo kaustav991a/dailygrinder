@@ -25,6 +25,7 @@ import { formatTotalDuration } from '@/lib/utils';
 import { TaskSuggester } from '@/components/task-suggester';
 import { EditProjectDialog } from '@/components/edit-project-dialog';
 import { LogTimeDialog } from '@/components/log-time-dialog';
+import { EditTimeEntryDialog } from '@/components/edit-time-entry-dialog';
 
 
 export default function ProjectPage() {
@@ -43,7 +44,10 @@ export default function ProjectPage() {
     isLogTimeDialogOpen,
     logTimeDialogDefaultProjectId,
     deleteTimeEntry,
-    openEditTimeEntryDialog
+    openEditTimeEntryDialog,
+    isEditTimeEntryDialogOpen,
+    closeEditTimeEntryDialog,
+    editingTimeEntry
   } = useAppContext();
   
   const [project, setProject] = useState<Project | null>(null);
@@ -181,7 +185,14 @@ export default function ProjectPage() {
         onOpenChange={closeLogTimeDialog}
         defaultProjectId={logTimeDialogDefaultProjectId}
     />
+
+    {editingTimeEntry && (
+        <EditTimeEntryDialog
+            open={isEditTimeEntryDialogOpen}
+            onOpenChange={closeEditTimeEntryDialog}
+            timeEntry={editingTimeEntry}
+        />
+    )}
     </>
   );
 }
-
